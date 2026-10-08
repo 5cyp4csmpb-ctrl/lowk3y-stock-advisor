@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Level Tracker
 // @namespace    lowk3y-level-tracker
-// @version      0.1.0
+// @version      0.2.0
 // @description  Estimate Torn level progress using Hall of Fame ranks; not exact XP.
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -19,6 +19,31 @@ el.style.cssText='position:fixed;left:8px;top:40%;z-index:2147483000;background:
 el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#8df5b5">📈 LEVEL TRACKER</b><button id="lk-close" style="background:none;border:0;color:#ddd">−</button></div><div id="lk-body" style="margin-top:9px"></div>';
 (document.body||document.documentElement).appendChild(el);
 const body=el.querySelector('#lk-body'),close=el.querySelector('#lk-close');
+// Drag by the header; remember position on this device.
+const header=el.firstElementChild;
+header.style.cursor='move';header.style.touchAction='none';
+let dragging=null;
+try{const p=JSON.parse(localStorage.getItem('lk-level-tracker-position')||'null');if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y)){el.style.left=Math.max(0,Math.min(innerWidth-60,p.x))+'px';el.style.top=Math.max(0,Math.min(innerHeight-50,p.y))+'px'}}catch(e){}
+header.addEventListener('pointerdown',e=>{
+ if(e.target.closest('button'))return;
+ const rect=el.getBoundingClientRect();
+ dragging={id:e.pointerId,dx:e.clientX-rect.left,dy:e.clientY-rect.top};
+ header.setPointerCapture(e.pointerId);
+ e.preventDefault();
+});
+header.addEventListener('pointermove',e=>{
+ if(!dragging||e.pointerId!==dragging.id)return;
+ const x=Math.max(0,Math.min(innerWidth-el.offsetWidth,e.clientX-dragging.dx));
+ const y=Math.max(0,Math.min(innerHeight-el.offsetHeight,e.clientY-dragging.dy));
+ el.style.left=x+'px';el.style.top=y+'px';
+});
+function stopDrag(e){
+ if(!dragging||e.pointerId!==dragging.id)return;
+ dragging=null;
+ try{localStorage.setItem('lk-level-tracker-position',JSON.stringify({x:parseFloat(el.style.left),y:parseFloat(el.style.top)}))}catch(err){}
+}
+header.addEventListener('pointerup',stopDrag);
+header.addEventListener('pointercancel',stopDrag);
 let minimized=false;
 close.onclick=()=>{minimized=!minimized;body.style.display=minimized?'none':'block';close.textContent=minimized?'+':'−'};
 function render(message){
