@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Stock Advisor
 // @namespace    lowk3y-stock-advisor
-// @version      1.6.0
+// @version      1.7.0
 // @description  Stock benefits, income ranking and alerts
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -48,7 +48,7 @@ catch { return {}; }
 };
 const state = Object.assign({
 x:12,y:180,budget:166000000,targets:{},history:{},
-values:{},owned:{SYM:500000},open:false,mode:'benefits',expanded:{},filter:'all',purchasePrices:{}
+values:{},owned:{SYM:500000},open:false,mode:'benefits',expanded:{},filter:'all',purchasePrices:{},lastHoldingsSync:null
 },read());
 state.targets ||= {};
 state.history ||= {};
@@ -128,7 +128,7 @@ input{background:#1b3027;color:white;border:1px solid #47765c;border-radius:5px;
 <div id="status" class="muted"></div><div id="filters" class="filters"></div><div id="stocks"></div>
 <div class="note muted">Estimates only. Benefit quantities, schedules and cash rewards
 have not been independently verified; check them in Torn before
-investing. Enter your owned shares and reward values manually.
+investing. Share counts sync from Torn when available; reward values remain manual.
 Incremental yield uses the full next benefit increment, not additional spend.
 Alerts appear in this panel while the script is running.
 No automatic trading.</div>
@@ -186,7 +186,7 @@ save();render();
 el('benefits').onclick=()=>{state.mode='benefits';save();render();};
 el('prices').onclick=()=>{state.mode='prices';save();render();};
 el('portfolio').onclick=()=>{state.mode='portfolio';save();render();};
-let stocks=[],busy=false;
+let stocks=[],busy=false,holdingsError='';
 function line(parent,label,value,cls){
 const r=node('div',undefined,'line');
 r.append(node('span',label,'muted'),node('span',value,cls));
@@ -235,8 +235,11 @@ return;
 }
 if(state.mode==='portfolio'){
 const holdings=stocks.filter(s=>Number(state.owned[s.symbol])>0);
-list.append(node('div','MANUAL HOLDINGS · Enter shares and average purchase price below. No account holdings are fetched automatically.','note small'));
-if(!holdings.length)list.append(node('div','No holdings entered yet. Open Benefits, expand a stock and enter your owned shares.','note'));
+list.append(node('div',state.lastHoldingsSync
+?'🔄 API HOLDINGS · Last synced '+new Date(state.lastHoldingsSync).toLocaleTimeString()+' · Shares update automatically. Average purchase prices remain manual.'
+:'⏳ Waiting for first API holdings sync. Previous manual holdings shown until verified.','note small'));
+if(holdingsError)list.append(node('div','⚠ Holdings sync: '+holdingsError+' · Previous holdings retained.','note small'));
+if(!holdings.length)list.append(node('div','No holdings found. If sync has not succeeded, open Benefits to enter shares manually.','note'));
 let total=0,costTotal=0,costKnown=0;
 for(const h of holdings){
 const shares=Math.max(0,Number(state.owned[h.symbol])||0);
@@ -380,6 +383,24 @@ const response=await fetch(url);
 if(!response.ok)throw Error('HTTP '+response.status);
 return response.json();
 }
+async function syncHoldings(){
+const url='https://api.torn.com/v2/user/stocks?key='+encodeURIComponent(API_KEY)+'&comment=Lowk3yStockAdvisor';
+const data=await api(url);
+if(!data||!Array.isArray(data.stocks))throw Error(data?.error?.error||'Unexpected holdings response');
+const byId=new Map(stocks.map(s=>[Number(s.id),s.symbol]));
+const updated={};
+for(const entry of data.stocks){
+const id=Number(entry.id),qty=Number(entry.shares);
+if(!Number.isSafeInteger(id)||!Number.isSafeInteger(qty)||qty<0)throw Error('Invalid holding entry');
+const symbol=byId.get(id);
+if(!symbol)throw Error('Unrecognised stock ID '+id);
+updated[symbol]=(updated[symbol]||0)+qty;
+}
+state.owned=updated;
+state.lastHoldingsSync=Date.now();
+holdingsError='';
+save();render();
+}
 async function refresh(){
 if(busy)return;
 busy=true;
@@ -414,6 +435,14 @@ stocks=next;
 save();render();
 el('updated').textContent='Updated '+new Date().toLocaleTimeString();
 el('status').textContent=stocks.length+' stocks loaded';
+try{
+await syncHoldings();
+el('status').textContent+=' · Holdings synced';
+}catch(syncError){
+holdingsError=String(syncError?.message||syncError);
+render();
+el('status').textContent+=' · ⚠ Holdings sync failed (saved shares retained)';
+}
 if(alerts.length)el('status').textContent+=' 🔔 '+alerts.join(' · ');
 }catch(e){
 el('status').textContent='⚠ Refresh failed; showing last successful prices if available. '+String(e?.message||e);
