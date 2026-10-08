@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Travel Radar
 // @namespace    lowk3y-travel-radar
-// @version      0.1.0
+// @version      0.2.0
 // @description  Xanax stock and estimated restock inline on Torn Travel Agency
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -20,7 +20,7 @@ const REFRESH=90000;
 let stock=null,model=null,loadedAt=0,error='';
 try{const c=JSON.parse(localStorage.getItem(CACHE)||'null');if(c&&Date.now()-c.t<900000){stock=c.stock;model=c.model;loadedAt=c.t;}}catch(e){}
 const css=document.createElement('style');
-css.textContent='.lk-travel-radar{display:block!important;font-size:11px!important;line-height:1.35!important;margin-top:3px!important;font-weight:500!important;color:#9bdcb3!important;white-space:normal!important;pointer-events:none!important}.lk-travel-radar.warn{color:#f4c47a!important}.lk-travel-radar.bad{color:#e89a9a!important}.lk-travel-radar small{color:#b8b8b8!important;font-size:10px!important}';
+css.textContent='.lk-travel-radar{display:block!important;position:relative!important;clear:both!important;width:100%!important;box-sizing:border-box!important;font-size:10px!important;line-height:1.25!important;margin:3px 0 0!important;padding:0!important;font-weight:500!important;color:#9bdcb3!important;white-space:normal!important;pointer-events:none!important;overflow-wrap:anywhere!important}.lk-travel-radar.warn{color:#f4c47a!important}.lk-travel-radar.bad{color:#e89a9a!important}.lk-travel-radar small{color:#b8b8b8!important;font-size:10px!important}';
 (document.head||document.documentElement).append(css);
 async function get(url){
  if(typeof PDA_httpGet==='function'){
@@ -79,19 +79,26 @@ function countryFromText(text){
  return null;
 }
 function update(){
- if(!/travelagency|travel agency|travel/i.test(document.body?.innerText?.slice(0,2500)||'')&&!/travel/i.test(location.href))return;
- const candidates=document.querySelectorAll('tr,li,[class*="destination"],[class*="country"],[class*="flight"]');
- for(const row of candidates){
-  if(row.closest('.lk-travel-radar'))continue;
-  const txt=(row.innerText||'').slice(0,160);
-  const code=countryFromText(txt);
+ // Only actual table rows. Never append to generic country/destination containers.
+ const rows=document.querySelectorAll('tr');
+ for(const row of rows){
+  const cells=Array.from(row.children).filter(e=>e.tagName==='TD');
+  if(cells.length<2)continue;
+  const cell=cells[0];
+  const raw=(cell.innerText||'').replace(/\\s+/g,' ').trim();
+  const code=countryFromText(raw);
   if(!code)continue;
-  const ownText=(row.firstElementChild?.innerText||'').slice(0,120);
-  if(!countryFromText(ownText))continue;
-  const first=row.querySelector('td')||row.firstElementChild;
-  if(!first||first.querySelector('.lk-travel-radar'))continue;
-  const el=document.createElement('span');el.className='lk-travel-radar';el.dataset.code=code;
-  first.appendChild(el);
+  const matches=Object.keys(COUNTRIES).filter(c=>raw.toLowerCase().includes(c));
+  if(matches.length!==1)continue;
+  let badge=cell.querySelector(':scope > .lk-travel-radar');
+  if(!badge){
+   // Do not inject into nested or duplicate rows.
+   if(row.parentElement?.closest('tr'))continue;
+   badge=document.createElement('span');
+   badge.className='lk-travel-radar';
+   badge.dataset.code=code;
+   cell.appendChild(badge);
+  }
  }
  for(const el of document.querySelectorAll('.lk-travel-radar')){
   const d=describe(el.dataset.code);
