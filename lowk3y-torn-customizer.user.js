@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Torn Customizer
 // @namespace    lowk3y-industries-customizer
-// @version      0.8.1
+// @version      0.8.2
 // @description  Optional cosmetic-only Torn PDA themes and fonts. No API, no gameplay actions.
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -14,7 +14,7 @@ if(document.getElementById('lk-customizer-host'))return;
 const KEY='lk-customizer-prefs-v1',POS='lk-customizer-position-v1';
 const defaults={enabled:true,theme:'green',font:'default',headingFont:'default',chatFont:'default',background:'original',backgroundImage:'',dim:55,panelColor:'original',panelOpacity:90,round:true,glow:false,glowIntensity:35,chatPanels:false};
 let prefs={...defaults};try{prefs={...defaults,...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch(e){}
-const presets={fantasy:{theme:'red',font:'gothic',headingFont:'gothic',chatFont:'elegant',background:'burgundy',panelColor:'burgundy',panelOpacity:85,round:true,glow:false},cyberpunk:{theme:'purple',font:'cyber',headingFont:'cyber',chatFont:'modern',background:'gradient',panelColor:'purple',panelOpacity:80,round:true,glow:true},tactical:{theme:'green',font:'military',headingFont:'military',chatFont:'mono',background:'forest',panelColor:'forest',panelOpacity:90,round:false,glow:false},underground:{theme:'green',font:'graffiti',headingFont:'street',chatFont:'modern',background:'cyber',panelColor:'charcoal',panelOpacity:80,round:true,glow:true,glowIntensity:45,chatPanels:true}};
+const presets={fantasy:{theme:'red',font:'gothic',headingFont:'gothic',chatFont:'elegant',background:'burgundy',panelColor:'burgundy',panelOpacity:85,round:true,glow:false},cyberpunk:{theme:'purple',font:'cyber',headingFont:'cyber',chatFont:'modern',background:'gradient',panelColor:'purple',panelOpacity:80,round:true,glow:true},tactical:{theme:'green',font:'military',headingFont:'military',chatFont:'mono',background:'forest',panelColor:'forest',panelOpacity:90,round:false,glow:false},underground:{theme:'green',font:'graffiti',headingFont:'street',chatFont:'graffiti',background:'cyber',panelColor:'charcoal',panelOpacity:80,round:true,glow:true,glowIntensity:45,chatPanels:true}};
 const themes={green:'#51e69a',blue:'#55bdf4',purple:'#c08aff',red:'#fa6879'};
 const fonts={default:'inherit',modern:'Arial, Helvetica, sans-serif',tech:'Trebuchet MS, Arial, sans-serif',mono:'Consolas, Menlo, monospace',graffiti:'"Permanent Marker", Impact, cursive',street:'"Bangers", Impact, cursive',cyber:'"Orbitron", Arial, sans-serif',military:'"Black Ops One", Impact, sans-serif',gothic:'"Pirata One", Georgia, serif',retro:'"Press Start 2P", monospace',comic:'"Comic Neue", cursive',elegant:'Georgia, Times New Roman, serif'};
 const fontCSS=document.createElement('link');fontCSS.rel='stylesheet';fontCSS.href='https://fonts.googleapis.com/css2?family=Bangers&family=Black+Ops+One&family=Comic+Neue:wght@400;700&family=Orbitron:wght@400;600;700&family=Permanent+Marker&family=Pirata+One&family=Press+Start+2P&display=swap';document.head.appendChild(fontCSS);
@@ -61,7 +61,7 @@ const chatSelectors=[
 '[class*="chatHeader"]','[class*="chat-header"]',
 '[class*="chatMessages"]','[class*="chat-messages"]'
 ];
-const chatRule=prefs.chatFont==='default'?'':chatSelectors.map(sel=>sel+','+sel+' *').join(',')+`{font-family:${chat}!important}`;
+const chatRule=prefs.chatFont==='default'?'':chatSelectors.flatMap(sel=>[sel,sel+' *','body #mainContainer '+sel,'body #mainContainer '+sel+' *']).join(',')+`{font-family:${chat}!important}`;
 style.textContent=!prefs.enabled?'':`
 :root{--lk-accent:${color}}
 ${bodyRule}
