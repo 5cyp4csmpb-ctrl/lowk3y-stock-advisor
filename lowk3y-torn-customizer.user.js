@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Torn Customizer
 // @namespace    lowk3y-industries-customizer
-// @version      0.8.0
+// @version      0.8.1
 // @description  Optional cosmetic-only Torn PDA themes and fonts. No API, no gameplay actions.
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -32,6 +32,7 @@ const pc=panelColors[prefs.panelColor]||'';
 const opacity=Math.max(45,Math.min(100,Number(prefs.panelOpacity)||90))/100;
 const panelRule=pc?`#mainContainer [class*="content-wrapper"],#mainContainer [class*="contentWrapper"],#mainContainer [class*="info-msg"],#mainContainer [class*="title-black"],#mainContainer [class*="title-gray"],#mainContainer [class*="content-title"],#mainContainer [class*="msg-info"]{background-color:rgba(${pc},${opacity})!important}`:'';
 const glowStrength=Math.max(0,Math.min(100,Number(prefs.glowIntensity)||0))/100;
+const chatSelectorsForPanels=['[class*="chatBox"]','[class*="chat-box"]','[class*="chatWindow"]','[class*="chat-window"]','[class*="chatPanel"]','[class*="chat-panel"]'];
 const chatPanelRule=prefs.chatPanels?chatSelectorsForPanels.map(sel=>sel+'{border-color:rgba(81,230,154,.55)!important;box-shadow:0 0 '+Math.round(12*glowStrength)+'px rgba(81,230,154,'+(glowStrength*.45).toFixed(2)+')!important}').join('\n'):'';
 const bodyRule=prefs.font==='default'?'':`body,body button,body input,body select,body textarea,body #mainContainer *{font-family:${font}!important}`;
 const headingRule=prefs.headingFont==='default'?'':`#mainContainer h1,#mainContainer h2,#mainContainer h3,#mainContainer h4,#mainContainer [class*="title"],#mainContainer [class*="heading"],#mainContainer [class*="header"]{font-family:${heading}!important}`;
@@ -60,7 +61,6 @@ const chatSelectors=[
 '[class*="chatHeader"]','[class*="chat-header"]',
 '[class*="chatMessages"]','[class*="chat-messages"]'
 ];
-const chatSelectorsForPanels=['[class*="chatBox"]','[class*="chat-box"]','[class*="chatWindow"]','[class*="chat-window"]','[class*="chatPanel"]','[class*="chat-panel"]'];
 const chatRule=prefs.chatFont==='default'?'':chatSelectors.map(sel=>sel+','+sel+' *').join(',')+`{font-family:${chat}!important}`;
 style.textContent=!prefs.enabled?'':`
 :root{--lk-accent:${color}}
