@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Torn Customizer
 // @namespace    lowk3y-industries-customizer
-// @version      0.3.0
+// @version      0.4.0
 // @description  Optional cosmetic-only Torn PDA themes and fonts. No API, no gameplay actions.
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -23,7 +23,32 @@ const color=themes[prefs.theme]||themes.green, font=fonts[prefs.font]||'inherit'
 const heading=fonts[prefs.headingFont]||'inherit',chat=fonts[prefs.chatFont]||'inherit';
 const bodyRule=prefs.font==='default'?'':`body,body button,body input,body select,body textarea,body #mainContainer *{font-family:${font}!important}`;
 const headingRule=prefs.headingFont==='default'?'':`#mainContainer h1,#mainContainer h2,#mainContainer h3,#mainContainer h4,#mainContainer [class*="title"],#mainContainer [class*="heading"],#mainContainer [class*="header"]{font-family:${heading}!important}`;
-const chatRule=prefs.chatFont==='default'?'':`[class*="chatBox"] *,[class*="chat-box"] *,[class*="chatWindow"] *,[class*="chat-window"] *,[class*="chatMessage"] *,[class*="chat-message"] *,[class*="chatInput"] *,[class*="chat-input"] *,[class*="messageList"] *,[class*="message-list"] *,[class*="messagesContainer"] *,[class*="messageContainer"] *,[class*="message-container"] *,[class*="conversation"] *,[class*="chatBox"] input,[class*="chatBox"] textarea,[class*="chatWindow"] textarea,[class*="chat-window"] textarea,[contenteditable="true"]{font-family:${chat}!important}`;
+// Scope the chat font to known chat-window containers, including Torn's legacy chat wrappers.
+// Keep the customizer panel isolated in its Shadow DOM.
+const chatSelectors=[
+'[class*="chatBox"]','[class*="chat-box"]','[class*="chatWindow"]',
+'[class*="chat-window"]','[class*="chatMessage"]','[class*="chat-message"]',
+'[class*="chatInput"]','[class*="chat-input"]','[class*="messageList"]',
+'[class*="message-list"]','[class*="messagesContainer"]',
+'[class*="messageContainer"]','[class*="message-container"]',
+'[class*="conversation"]','[class*="chat-box-wrapper"]',
+'[class*="chat-box-body"]','[class*="chat-box-header"]',
+'[class*="chat-box-footer"]','[class*="chat-box-content"]',
+'[class*="chat-box-message"]','[class*="chat-box-input"]',
+'[class*="chat-box-text"]','[class*="chat-message-text"]',
+'[class*="chat-message-author"]','[class*="chat-message-content"]',
+'[class*="chat-message-container"]',
+'[id^="chatRoot"]','[id^="chat-root"]','[id^="chatBox"]',
+'[id^="chat-box"]','[id^="chatWindow"]',
+'[class*="chatRoot"]','[class*="chat-root"]',
+'[class*="chatPanel"]','[class*="chat-panel"]',
+'[class*="chatContent"]','[class*="chat-content"]',
+'[class*="chatBody"]','[class*="chat-body"]',
+'[class*="chatFooter"]','[class*="chat-footer"]',
+'[class*="chatHeader"]','[class*="chat-header"]',
+'[class*="chatMessages"]','[class*="chat-messages"]'
+];
+const chatRule=prefs.chatFont==='default'?'':chatSelectors.map(sel=>sel+','+sel+' *').join(',')+`{font-family:${chat}!important}`;
 style.textContent=!prefs.enabled?'':`
 :root{--lk-accent:${color}}
 ${bodyRule}
