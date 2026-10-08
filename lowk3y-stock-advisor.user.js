@@ -297,10 +297,10 @@ const target=Number(state.targets[id]);
 const change=prev.price>0?(price/prev.price-1)*100:null;
 // Notify on a downward crossing, including the first reading.
 // Reset the alert only after price rises above the target.
-if(target>0&&price<=target&&!prev.alerted)
+if(target>0&&price<=target&&(!prev.alerted||prev.target!==target))
 alerts.push(symbol+' reached '+short(price));
 next.push({id,symbol,name:v.name||'Stock',price,change});
-state.history[id]={price,alerted:target>0&&price<=target};
+state.history[id]={price,target,alerted:target>0&&price<=target};
 }
 if(!next.length)throw Error('No valid stock data');
 stocks=next;
