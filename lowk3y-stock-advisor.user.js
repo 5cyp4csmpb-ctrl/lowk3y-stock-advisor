@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Stock Advisor
 // @namespace    lowk3y-stock-advisor
-// @version      1.2.0
+// @version      1.3.0
 // @description  Stock benefits, income ranking and alerts
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -26,7 +26,21 @@ IOU:[3000000,31,'$12M Cash',12000000], TMI:[6000000,31,'$25M Cash',25000000],
 CNC:[7500000,31,'$80M Cash',80000000], EVL:[100000,7,'1000 Happy',null],
 CBD:[350000,7,'50 Nerve',null], PTS:[10000000,7,'100 Points',null],
 MUN:[5000000,7,'Energy Drink Pack',null], BAG:[3000000,7,'Ammunition Pack',null],
-TCC:[7500000,31,'Clothing Cache',null]
+TCC:[7500000,31,'Clothing Cache',null],
+HRG:[10000000,31,'Random Property',null],
+TCI:[1500000,0,'10% Bank Interest Bonus',null],
+WLT:[9000000,0,'Private Jet Access',null],
+SYS:[3000000,0,'Advanced Firewall',null],
+IST:[100000,0,'Free Education Courses',null],
+TCM:[1000000,0,'10% Racing Skill Boost',null],
+TCP:[1000000,0,'Company Sales Boost',null],
+ELT:[5000000,0,'10% Home Upgrade Discount',null],
+MSG:[300000,0,'Free Classified Advertising',null],
+IIL:[1000000,0,'50% Virus Coding Time Reduction',null],
+TGP:[2500000,0,'Company Advertising Boost',null],
+WSU:[1000000,0,'10% Education Course Time Reduction',null],
+YAZ:[1000000,0,'Free Banner Advertising',null],
+LOS:[7500000,0,'25% Mission Reward Bonus',null]
 };
 const read = () => {
 try { return JSON.parse(localStorage.getItem(STORAGE)) || {}; }
@@ -99,7 +113,7 @@ input{background:#1b3027;color:white;border:1px solid #47765c;border-radius:5px;
 <div class="note muted">Estimates only. Benefit quantities, schedules and cash rewards
 have not been independently verified; check them in Torn before
 investing. Enter your owned shares and reward values manually.
-Yield uses the full next-block holding value, not additional spend.
+Incremental yield uses the full next benefit increment, not additional spend.
 Alerts appear in this panel while the script is running.
 No automatic trading.</div>
 </section>`;
@@ -175,13 +189,14 @@ parent.append(r);
 }
 function requiredShares(symbol,base){
 const owned=Math.max(0,Number(state.owned[symbol])||0);
+if(BENEFITS[symbol]?.[1]===0) return {additional:Math.max(0,base-owned),threshold:base,increment:base};
 // Active benefit increments double each time.
 let threshold=base,increment=base;
 while(threshold<=owned && increment<base*1048576){
 increment*=2;
 threshold+=increment;
 }
-return {additional:Math.max(0,threshold-owned),threshold};
+return {additional:Math.max(0,threshold-owned),threshold,increment};
 }
 function render(){
 const list=el('stocks');
@@ -197,12 +212,11 @@ const req=requiredShares(s.symbol,b[0]);
 const cost=req.additional*s.price;
 const configured=state.values[s.symbol] ?? b[3];
 const value=configured==null ? null : Number(configured);
-const annual=Number.isFinite(value)&&value>0 ? value*365/b[1] : null;
-// Yield is measured against the full next-block holding value,
-// not only the additional cash needed to reach it.
-const holdingValue=req.threshold*s.price;
-const yieldPct=annual!==null && holdingValue>0
-? annual/holdingValue*100 : null;
+const annual=b[1]>0 && Number.isFinite(value)&&value>0 ? value*365/b[1] : null;
+// Marginal annual yield for the next active benefit increment.
+const incrementValue=req.increment*s.price;
+const yieldPct=annual!==null && incrementValue>0
+? annual/incrementValue*100 : null;
 return {...s,benefit:b,req,cost,value,annual,yieldPct};
 });
 if(state.mode==='benefits'){
@@ -217,12 +231,12 @@ if(ay!==by)return by-ay;
 return a.cost-b.cost;
 });
 list.append(node('div',
-'AFFORDABLE FIRST · Ranked by estimated yield where reward values are known',
+'AFFORDABLE FIRST · Ranked by incremental yield where values are known',
 'note small'));
 for(const s of benefitRows){
 const r=node('div',undefined,'row');
 r.append(node('div',s.symbol+' · '+s.name,'symbol'));
-r.append(node('div',s.benefit[2]+' every '+s.benefit[1]+' days','muted'));
+r.append(node('div',s.benefit[1]===0 ? 'Passive perk · '+s.benefit[2] : s.benefit[2]+' every '+s.benefit[1]+' days','muted'));
 line(r,'Current share price',short(s.price));
 line(r,'Shares needed to next block',money(s.req.additional));
 line(r,'Additional cost',short(s.cost),s.cost<=state.budget?'good':'bad');
@@ -231,7 +245,7 @@ line(r,'Budget',s.cost<=state.budget?'AFFORDABLE'
 inputLine(r,'Shares you already own',state.owned[s.symbol] ?? 0,v=>{
 state.owned[s.symbol]=v||0;
 });
-if(s.benefit[3]===null){
+if(s.benefit[1]>0 && s.benefit[3]===null){
 inputLine(r,'Reward resale/value ($)',state.values[s.symbol],v=>{
 if(v===null)delete state.values[s.symbol];
 else state.values[s.symbol]=v;
@@ -239,9 +253,9 @@ else state.values[s.symbol]=v;
 }
 if(s.annual!==null){
 line(r,'Est. annual benefit value',short(s.annual));
-line(r,'Est. annual yield',s.yieldPct.toFixed(2)+'%','good');
+line(r,'Est. annual incremental yield',s.yieldPct.toFixed(2)+'%','good');
 }else{
-line(r,'Income ranking','Enter reward value');
+line(r,'Income ranking',s.benefit[1]===0?'Passive perk · no fixed cash yield':'Enter reward value');
 }
 list.append(r);
 }
