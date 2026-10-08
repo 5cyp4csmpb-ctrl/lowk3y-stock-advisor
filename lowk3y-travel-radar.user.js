@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Travel Radar
 // @namespace    lowk3y-travel-radar
-// @version      0.5.0
+// @version      0.6.0
 // @description  Xanax stock and estimated restock inline on Torn Travel Agency
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -14,9 +14,12 @@ if(window.__lowk3yTravelRadar)return;
 window.__lowk3yTravelRadar=true;
 const COUNTRIES={'canada':'can','united kingdom':'uni','japan':'jap','south africa':'sou'};
 const STOCK='https://yata.yt/api/v1/travel/export/';
+const PROM='https://api.prombot.co.uk/api/travel';
 const MODEL='https://raw.githubusercontent.com/russianrob/torn-foreign-restock/main/restock-model.json';
 const CACHE='lk-travel-radar-v1';
-const REFRESH=90000;
+const REFRESH=60000;
+const HISTORY='lk-travel-radar-restocks-v1';
+let history={};try{history=JSON.parse(localStorage.getItem(HISTORY)||'{}')||{}}catch(e){}
 let stock=null,model=null,loadedAt=0,error='';
 try{const c=JSON.parse(localStorage.getItem(CACHE)||'null');if(c&&Date.now()-c.t<900000){stock=c.stock;model=c.model;loadedAt=c.t;}}catch(e){}
 const css=document.createElement('style');
@@ -38,6 +41,7 @@ function parseTime(v){
  if(typeof v==='number')return v>1e12?v:v>1e9?v*1000:null;
  const n=Date.parse(v);return Number.isFinite(n)?n:null;
 }
+function clock(ms){return new Date(ms).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false});}
 function remaining(ms){
  const sec=Math.max(0,Math.ceil(ms/1000));
  return [Math.floor(sec/3600),Math.floor(sec%3600/60),sec%60].map(x=>String(x).padStart(2,'0')).join(':');
@@ -50,25 +54,26 @@ function info(code){
  const age=stamp===null?Infinity:Math.max(0,Date.now()-stamp);
  const fresh=age<15*60000;
  const stale=age>=30*60000;
- let eta=parseTime(item?.nextRestock),estimated=false;
- if(!eta){
+ let eta=parseTime(item?.nextRestock),estimated=false,lastModel=null;
+ {
   const candidates=[model?.items?.[code]?.['206'],model?.items?.[code]?.[206],model?.[code]?.['206'],model?.[code]?.[206],model?.items?.['206']?.[code]];
   const m=candidates.find(x=>x&&Number(x.interval)>0&&Number(x.last)>0);
   if(m){
    const interval=Number(m.interval)*1000,last=Number(m.last)*1000;
-   const elapsed=Date.now()-last;
-   eta=elapsed<0?last:last+(Math.floor(elapsed/interval)+1)*interval;
-   estimated=true;
+   if(last<=Date.now()&&Date.now()-last<7*86400000)lastModel=last;
+   if(!eta){const elapsed=Date.now()-last;eta=elapsed<0?last:last+(Math.floor(elapsed/interval)+1)*interval;estimated=true;}
   }
  }
- return {qty,age,fresh,stale,eta,estimated,observed:!!entry};
+ const observedLast=history[code]?.last||null;
+ return {qty,age,fresh,stale,eta,estimated,last:observedLast||lastModel,lastObserved:!!observedLast,observed:!!entry};
 }
 function describe(code){
  const d=info(code);
  if(!d.observed)return {text:'💊 Xanax · Stock data unavailable',kind:'warn'};
  const ageLabel=Number.isFinite(d.age)?Math.floor(d.age/60000)+'m old':'age unknown';
- const suffix=' · '+ageLabel;
- if(d.stale)return {text:'💊 Xanax · Stale data ('+ageLabel+') · ETA unreliable',kind:'bad'};
+ const lastText=d.last?' · Last '+(d.lastObserved?'':'~')+clock(d.last):'';
+ const suffix=lastText+' · '+ageLabel;
+ if(d.stale)return {text:'💊 Stale ('+ageLabel+')'+lastText,kind:'bad'};
  if(d.qty!==null&&d.qty>0)return {text:'💊 '+d.qty.toLocaleString()+' in stock'+suffix,kind:d.fresh?'':'warn'};
  if(d.eta&&d.eta>Date.now())return {text:'💊 ETA ~'+remaining(d.eta-Date.now())+suffix,kind:'warn'};
  return {text:'💊 '+(d.qty===0?'Out of stock':'Unknown stock')+suffix,kind:'warn'};
@@ -123,12 +128,34 @@ function update(){
  }
 }
 let busy=false;
+function recordRestocks(next){
+ for(const code of Object.values(COUNTRIES)){
+  const e=next?.stocks?.[code],item=e?.stocks?.find(x=>Number(x.id)===206);
+  const qty=Number(item?.quantity),stamp=parseTime(e?.update);
+  if(!item||!Number.isFinite(qty)||!stamp||Date.now()-stamp>15*60000)continue;
+  const prev=history[code]||{};
+  if(prev.stamp&&stamp>prev.stamp&&prev.qty===0&&qty>0)prev.last=stamp;
+  if(!prev.stamp||stamp>=prev.stamp){prev.qty=qty;prev.stamp=stamp;history[code]=prev;}
+ }
+ try{localStorage.setItem(HISTORY,JSON.stringify(history))}catch(e){}
+}
 async function refresh(){
  if(busy)return;busy=true;
  try{
-  const s=await get(STOCK);
-  if(!s||!s.stocks||typeof s.stocks!=='object')throw Error('Invalid stock feed');
-  stock=s;loadedAt=Date.now();error='';
+  // Prefer Prometheus; fall back to YATA if Prometheus is unavailable or lacks Xanax reports.
+  let p=null,y=null;
+  try{p=await get(PROM)}catch(e){console.warn('[LowK3y Travel Radar] Prometheus unavailable',e)}
+  try{y=await get(STOCK)}catch(e){console.warn('[LowK3y Travel Radar] YATA unavailable',e)}
+  if(!p?.stocks&&!y?.stocks)throw Error('Both stock feeds unavailable');
+  const merged={stocks:{}};
+  for(const code of Object.values(COUNTRIES)){
+   const a=p?.stocks?.[code],b=y?.stocks?.[code];
+   const valid=e=>Array.isArray(e?.stocks)&&e.stocks.some(x=>Number(x.id)===206);
+   const ap=valid(a)?parseTime(a.update):null,bp=valid(b)?parseTime(b.update):null;
+   merged.stocks[code]=ap!==null&&(bp===null||ap>=bp)?a:(bp!==null?b:(valid(a)?a:(valid(b)?b:null)));
+  }
+  recordRestocks(merged);
+  stock=merged;loadedAt=Date.now();error='';
   try{const m=await get(MODEL);if(m&&typeof m==='object')model=m;}catch(e){}
   try{localStorage.setItem(CACHE,JSON.stringify({t:loadedAt,stock,model}));}catch(e){}
  }catch(e){error=String(e?.message||e);console.warn('[LowK3y Travel Radar] Feed unavailable:',error);}
