@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Stock Advisor
 // @namespace    lowk3y-stock-advisor
-// @version      1.8.0
+// @version      1.9.0
 // @description  Stock benefits, income ranking and alerts
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -48,7 +48,7 @@ catch { return {}; }
 };
 const state = Object.assign({
 x:12,y:180,budget:166000000,targets:{},history:{},
-values:{},owned:{},open:false,mode:'benefits',expanded:{},filter:'all',purchasePrices:{},lastHoldingsSync:null
+values:{},owned:{},open:false,mode:'benefits',expanded:{},filter:'all',purchasePrices:{},lastHoldingsSync:null,portfolioExpanded:{}
 },read());
 state.targets ||= {};
 state.history ||= {};
@@ -56,6 +56,7 @@ state.values ||= {};
 state.owned ||= {};
 state.expanded ||= {};
 state.purchasePrices ||= {};
+state.portfolioExpanded ||= {};
 state.autoSync = true;
 if(!['all','affordable','roi','passive','owned'].includes(state.filter))state.filter='all';
 const save = () => {
@@ -247,7 +248,17 @@ const avg=Number(state.purchasePrices[h.symbol]);
 const known=Number.isFinite(avg)&&avg>0;
 if(known){costTotal+=avg*shares;costKnown++;}
 const item=node('div',undefined,'portfolio-item');
-item.append(node('div',h.symbol+' · '+h.name,'symbol'));
+const toggle=node('button',undefined,'stock-toggle');
+const expanded=!!state.portfolioExpanded[h.symbol];
+toggle.type='button';
+toggle.setAttribute('aria-expanded',String(expanded));
+const title=node('div');
+title.append(node('div',h.symbol+' · '+h.name,'symbol'));
+title.append(node('div',money(shares)+' shares · '+short(value)+' market value','stock-summary'));
+toggle.append(title,node('span',expanded?'▴':'▾','stock-chevron'));
+toggle.onclick=()=>{state.portfolioExpanded[h.symbol]=!expanded;save();render();};
+item.append(toggle);
+if(expanded){
 line(item,'Shares',money(shares));
 line(item,'Market value',short(value),'good');
 inputLine(item,'Average purchase price ($)',state.purchasePrices[h.symbol],v=>{
@@ -270,6 +281,7 @@ line(item,'Passive benefit threshold',shares>=benefit[0]?'Reached (7-day activat
 line(item,'Shares to next benefit',money(next.additional));
 line(item,'Cost to next benefit',short(next.additional*h.price));
 }
+}
 list.append(item);
 }
 const summary=node('div',undefined,'note');
@@ -279,7 +291,16 @@ if(costKnown===holdings.length&&holdings.length){
 const profit=total-costTotal;
 line(summary,'Total unrealised P/L',(profit>=0?'+':'-')+short(Math.abs(profit)),profit>=0?'good':'bad');
 }else line(summary,'Total unrealised P/L','Add all purchase prices');
-summary.append(node('div','Market prices can be stale if the API refresh fails. P/L excludes fees and dividends.','portfolio-warning'));
+summary.append(node('div','Tap a holding to expand. Prices may be stale after failed refreshes; P/L excludes fees and dividends.','portfolio-warning'));
+const opportunities=holdings.map(h=>{
+const b=BENEFITS[h.symbol];if(!b)return null;
+const req=requiredShares(h.symbol,b[0]);
+return {symbol:h.symbol,remaining:req.additional,cost:req.additional*h.price,percent:req.threshold>0?100*(1-req.additional/req.threshold):0};
+}).filter(Boolean).sort((a,b)=>a.cost-b.cost);
+if(opportunities.length){
+const next=opportunities[0];
+summary.append(node('div','Closest next block by additional cost: '+next.symbol+' · '+short(next.cost)+' ('+money(next.remaining)+' shares)','portfolio-warning'));
+}
 list.prepend(summary);
 return;
 }
@@ -343,7 +364,7 @@ line(detail,'Shares needed to next block',money(s.req.additional));
 line(detail,'Additional cost',short(s.cost),s.cost<=state.budget?'good':'bad');
 line(detail,'Budget',s.cost<=state.budget?'AFFORDABLE'
 :'SAVE '+short(s.cost-state.budget),s.cost<=state.budget?'good':'bad');
-inputLine(detail,'Shares you already own',state.owned[s.symbol] ?? 0,v=>{
+inputLine(detail,'Shares you already own (API sync overrides)',state.owned[s.symbol] ?? 0,v=>{
 state.owned[s.symbol]=v||0;
 });
 if(s.benefit[1]>0 && s.benefit[3]===null){
