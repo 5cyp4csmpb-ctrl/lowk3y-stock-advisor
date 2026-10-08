@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Travel Radar
 // @namespace    lowk3y-travel-radar
-// @version      0.2.0
+// @version      0.3.0
 // @description  Xanax stock and estimated restock inline on Torn Travel Agency
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -79,26 +79,38 @@ function countryFromText(text){
  return null;
 }
 function update(){
- // Only actual table rows. Never append to generic country/destination containers.
- const rows=document.querySelectorAll('tr');
- for(const row of rows){
-  const cells=Array.from(row.children).filter(e=>e.tagName==='TD');
-  if(cells.length<2)continue;
-  const cell=cells[0];
-  const raw=(cell.innerText||'').replace(/\\s+/g,' ').trim();
-  const code=countryFromText(raw);
-  if(!code)continue;
-  const matches=Object.keys(COUNTRIES).filter(c=>raw.toLowerCase().includes(c));
-  if(matches.length!==1)continue;
-  let badge=cell.querySelector(':scope > .lk-travel-radar');
-  if(!badge){
-   // Do not inject into nested or duplicate rows.
-   if(row.parentElement?.closest('tr'))continue;
-   badge=document.createElement('span');
-   badge.className='lk-travel-radar';
-   badge.dataset.code=code;
-   cell.appendChild(badge);
+ // Torn's travel list uses styled divs rather than standard table rows.
+ // Find the smallest country-name element, then attach a badge inside its own row.
+ const names=Object.keys(COUNTRIES);
+ const candidates=document.querySelectorAll('b,strong,span,div,a');
+ const seen=new Set();
+ for(const node of candidates){
+  if(node.closest('.lk-travel-radar'))continue;
+  if(node.children.length>2)continue;
+  const text=(node.textContent||'').replace(/\\s+/g,' ').trim().toLowerCase();
+  const country=names.find(name=>text===name||text.startsWith(name+' -')||text.startsWith(name+' –'));
+  if(!country)continue;
+  const code=COUNTRIES[country];
+  if(seen.has(code))continue;
+  // Prefer the lowest element containing the actual name.
+  if(Array.from(node.children).some(child=>(child.textContent||'').toLowerCase().includes(country)))continue;
+  let row=node;
+  for(let i=0;i<5&&row.parentElement;i++){
+   if(row.parentElement.querySelectorAll('button').length>2)break;
+   const parent=row.parentElement;
+   const str=(parent.innerText||'').slice(0,180).toLowerCase();
+   if(str.includes('free')&&str.includes(country))break;
+   row=parent;
   }
+  // Badge lives in its own full-width line within the country-name container.
+  const target=node.parentElement||node;
+  if(target.querySelector('.lk-travel-radar')){seen.add(code);continue;}
+  const badge=document.createElement('span');
+  badge.className='lk-travel-radar';
+  badge.dataset.code=code;
+  badge.style.cssText='display:block!important;position:relative!important;float:none!important;clear:both!important;width:auto!important;max-width:100%!important;margin:3px 0 0!important;font-size:10px!important;line-height:1.2!important;white-space:normal!important;pointer-events:none!important';
+  target.appendChild(badge);
+  seen.add(code);
  }
  for(const el of document.querySelectorAll('.lk-travel-radar')){
   const d=describe(el.dataset.code);
