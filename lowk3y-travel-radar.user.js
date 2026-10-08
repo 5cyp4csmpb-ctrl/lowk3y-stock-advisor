@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Travel Radar
 // @namespace    lowk3y-travel-radar
-// @version      0.4.0
+// @version      0.5.0
 // @description  Xanax stock and estimated restock inline on Torn Travel Agency
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -108,11 +108,11 @@ function update(){
   const badge=document.createElement('span');
   badge.className='lk-travel-radar';
   badge.dataset.code=code;
-  badge.style.cssText='display:block!important;position:absolute!important;left:0!important;bottom:1px!important;float:none!important;clear:both!important;width:100%!important;max-width:100%!important;margin:0!important;font-size:10px!important;line-height:1.1!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;pointer-events:none!important';
+  badge.style.cssText='display:block!important;position:absolute!important;left:0!important;top:calc(50% + 6px)!important;bottom:auto!important;float:none!important;clear:both!important;width:100%!important;max-width:100%!important;margin:0!important;font-size:10px!important;line-height:1.1!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;pointer-events:none!important;z-index:1!important';
   target.appendChild(badge);
   // Make room for the indicator inside the fixed-height Torn flight row.
   target.style.setProperty('position','relative','important');
-  target.style.setProperty('padding-bottom','16px','important');
+  target.style.setProperty('padding-bottom','0px','important');
   target.style.setProperty('box-sizing','border-box','important');
   seen.add(code);
  }
