@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Stock Advisor
 // @namespace    lowk3y-stock-advisor
-// @version      1.3.0
+// @version      1.4.0
 // @description  Stock benefits, income ranking and alerts
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -48,12 +48,13 @@ catch { return {}; }
 };
 const state = Object.assign({
 x:12,y:180,budget:166000000,targets:{},history:{},
-values:{},owned:{SYM:500000},open:false,mode:'benefits'
+values:{},owned:{SYM:500000},open:false,mode:'benefits',expanded:{}
 },read());
 state.targets ||= {};
 state.history ||= {};
 state.values ||= {};
 state.owned ||= {};
+state.expanded ||= {};
 const save = () => {
 try { localStorage.setItem(STORAGE,JSON.stringify(state)); }
 catch(e) { console.warn(e); }
@@ -90,7 +91,12 @@ pointer-events:auto;box-shadow:0 10px 30px #000a
 .btn{background:#20583c;color:white;border:1px solid #478461;border-radius:7px;padding:8px}
 .actions{flex-wrap:wrap;margin:10px 0}
 .note{background:#20382b;border-radius:8px;padding:10px;margin:10px 0;line-height:1.5}
-.row{border-top:1px solid #30503e;padding:12px 0}
+.row{border-top:1px solid #30503e;padding:9px 0}
+.stock-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;background:transparent;color:inherit;border:0;padding:6px 0;cursor:pointer}
+.stock-summary{font-size:11px;color:#9ab6a6;margin:3px 0 0}
+.stock-detail{padding:4px 0 8px}
+.stock-chevron{color:#80f3a5;font-size:15px;flex-shrink:0}
+@media(max-width:420px){.panel{top:48px;right:6px;width:calc(100vw - 12px);max-height:calc(100dvh - 62px);padding:11px}.note{padding:8px}.line{gap:5px}.line span:last-child{text-align:right}}
 .symbol{font-weight:bold;font-size:14px}
 .line{display:flex;justify-content:space-between;gap:8px;margin:5px 0}
 .good{color:#80f3a5}
@@ -231,31 +237,45 @@ if(ay!==by)return by-ay;
 return a.cost-b.cost;
 });
 list.append(node('div',
-'AFFORDABLE FIRST · Ranked by incremental yield where values are known',
+'TAP TO EXPAND · Affordable first; yields are estimates',
 'note small'));
 for(const s of benefitRows){
 const r=node('div',undefined,'row');
-r.append(node('div',s.symbol+' · '+s.name,'symbol'));
-r.append(node('div',s.benefit[1]===0 ? 'Passive perk · '+s.benefit[2] : s.benefit[2]+' every '+s.benefit[1]+' days','muted'));
-line(r,'Current share price',short(s.price));
-line(r,'Shares needed to next block',money(s.req.additional));
-line(r,'Additional cost',short(s.cost),s.cost<=state.budget?'good':'bad');
-line(r,'Budget',s.cost<=state.budget?'AFFORDABLE'
+const expanded=!!state.expanded[s.symbol];
+const toggle=node('button',undefined,'stock-toggle');
+toggle.type='button';
+toggle.setAttribute('aria-expanded',String(expanded));
+const label=node('div');
+label.append(node('div',s.symbol+' · '+s.name,'symbol'));
+label.append(node('div',s.benefit[1]===0?'Passive · '+s.benefit[2]:s.benefit[2]+' / '+s.benefit[1]+' days','stock-summary'));
+label.append(node('div',short(s.cost)+' next block · '+(s.cost<=state.budget?'Affordable':'Save '+short(s.cost-state.budget))+(s.yieldPct!==null?' · Est. '+s.yieldPct.toFixed(1)+'%':''),'stock-summary'));
+toggle.append(label,node('span',expanded?'▴':'▾','stock-chevron'));
+toggle.onclick=()=>{state.expanded[s.symbol]=!expanded;save();render();};
+r.append(toggle);
+if(expanded){
+const detail=node('div',undefined,'stock-detail');
+
+line(detail,'Current share price',short(s.price));
+line(detail,'Shares needed to next block',money(s.req.additional));
+line(detail,'Additional cost',short(s.cost),s.cost<=state.budget?'good':'bad');
+line(detail,'Budget',s.cost<=state.budget?'AFFORDABLE'
 :'SAVE '+short(s.cost-state.budget),s.cost<=state.budget?'good':'bad');
-inputLine(r,'Shares you already own',state.owned[s.symbol] ?? 0,v=>{
+inputLine(detail,'Shares you already own',state.owned[s.symbol] ?? 0,v=>{
 state.owned[s.symbol]=v||0;
 });
 if(s.benefit[1]>0 && s.benefit[3]===null){
-inputLine(r,'Reward resale/value ($)',state.values[s.symbol],v=>{
+inputLine(detail,'Reward resale/value ($)',state.values[s.symbol],v=>{
 if(v===null)delete state.values[s.symbol];
 else state.values[s.symbol]=v;
 });
 }
 if(s.annual!==null){
-line(r,'Est. annual benefit value',short(s.annual));
-line(r,'Est. annual incremental yield',s.yieldPct.toFixed(2)+'%','good');
+line(detail,'Est. annual benefit value',short(s.annual));
+line(detail,'Est. annual incremental yield',s.yieldPct.toFixed(2)+'%','good');
 }else{
-line(r,'Income ranking',s.benefit[1]===0?'Passive perk · no fixed cash yield':'Enter reward value');
+line(detail,'Income ranking',s.benefit[1]===0?'Passive perk · no fixed cash yield':'Enter reward value');
+}
+r.append(detail);
 }
 list.append(r);
 }
