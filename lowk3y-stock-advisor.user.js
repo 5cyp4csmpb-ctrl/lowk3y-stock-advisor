@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Stock Advisor
 // @namespace    lowk3y-stock-advisor
-// @version      1.4.0
+// @version      1.5.0
 // @description  Stock benefits, income ranking and alerts
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -48,13 +48,14 @@ catch { return {}; }
 };
 const state = Object.assign({
 x:12,y:180,budget:166000000,targets:{},history:{},
-values:{},owned:{SYM:500000},open:false,mode:'benefits',expanded:{}
+values:{},owned:{SYM:500000},open:false,mode:'benefits',expanded:{},filter:'all'
 },read());
 state.targets ||= {};
 state.history ||= {};
 state.values ||= {};
 state.owned ||= {};
 state.expanded ||= {};
+if(!['all','affordable','roi','passive','owned'].includes(state.filter))state.filter='all';
 const save = () => {
 try { localStorage.setItem(STORAGE,JSON.stringify(state)); }
 catch(e) { console.warn(e); }
@@ -92,6 +93,9 @@ pointer-events:auto;box-shadow:0 10px 30px #000a
 .actions{flex-wrap:wrap;margin:10px 0}
 .note{background:#20382b;border-radius:8px;padding:10px;margin:10px 0;line-height:1.5}
 .row{border-top:1px solid #30503e;padding:9px 0}
+.filters{display:flex;flex-wrap:wrap;gap:6px;margin:9px 0}
+.filter{font-size:11px;padding:7px 9px;border:1px solid #47765c;border-radius:18px;background:#173c2b;color:#c9e8d3}
+.filter.selected{background:#3a9760;color:white;border-color:#79d99d;font-weight:bold}
 .stock-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;background:transparent;color:inherit;border:0;padding:6px 0;cursor:pointer}
 .stock-summary{font-size:11px;color:#9ab6a6;margin:3px 0 0}
 .stock-detail{padding:4px 0 8px}
@@ -115,7 +119,7 @@ input{background:#1b3027;color:white;border:1px solid #47765c;border-radius:5px;
 <button class="btn" id="prices">📉 Prices</button>
 <button class="btn" id="refresh">↻ Refresh</button>
 </div>
-<div id="status" class="muted"></div><div id="stocks"></div>
+<div id="status" class="muted"></div><div id="filters" class="filters"></div><div id="stocks"></div>
 <div class="note muted">Estimates only. Benefit quantities, schedules and cash rewards
 have not been independently verified; check them in Torn before
 investing. Enter your owned shares and reward values manually.
@@ -205,6 +209,17 @@ threshold+=increment;
 return {additional:Math.max(0,threshold-owned),threshold,increment};
 }
 function render(){
+const filters=el('filters');
+filters.replaceChildren();
+filters.hidden=state.mode!=='benefits';
+if(state.mode==='benefits'){
+for(const [key,label] of [['all','All'],['affordable','Affordable'],['roi','Highest ROI'],['passive','Passive'],['owned','Owned']]){
+const btn=node('button',label,'filter'+(state.filter===key?' selected':''));
+btn.type='button';btn.setAttribute('aria-pressed',String(state.filter===key));
+btn.onclick=()=>{state.filter=key;save();render();};
+filters.append(btn);
+}
+}
 const list=el('stocks');
 list.replaceChildren();
 if(!stocks.length){
@@ -226,8 +241,18 @@ const yieldPct=annual!==null && incrementValue>0
 return {...s,benefit:b,req,cost,value,annual,yieldPct};
 });
 if(state.mode==='benefits'){
-const benefitRows=rows.filter(r=>r.benefit);
+const benefitRows=rows.filter(r=>r.benefit && (
+state.filter==='all' ||
+(state.filter==='affordable' && r.cost<=state.budget) ||
+(state.filter==='roi' && r.yieldPct!==null) ||
+(state.filter==='passive' && r.benefit[1]===0) ||
+(state.filter==='owned' && Number(state.owned[r.symbol])>0)
+));
 benefitRows.sort((a,b)=>{
+if(state.filter==='roi'){
+const ay=a.yieldPct??-1,by=b.yieldPct??-1;
+return by-ay || a.cost-b.cost;
+}
 const af=a.cost<=state.budget;
 const bf=b.cost<=state.budget;
 if(af!==bf)return af?-1:1;
@@ -237,8 +262,9 @@ if(ay!==by)return by-ay;
 return a.cost-b.cost;
 });
 list.append(node('div',
-'TAP TO EXPAND · Affordable first; yields are estimates',
+state.filter==='roi'?'HIGHEST ESTIMATED ROI · Assumptions unverified':'TAP TO EXPAND · Affordable first; yields are estimates',
 'note small'));
+if(!benefitRows.length)list.append(node('div','No stocks match this filter. Try All stocks.','note'));
 for(const s of benefitRows){
 const r=node('div',undefined,'row');
 const expanded=!!state.expanded[s.symbol];
