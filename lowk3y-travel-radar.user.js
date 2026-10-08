@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Travel Radar
 // @namespace    lowk3y-travel-radar
-// @version      0.3.0
+// @version      0.4.0
 // @description  Xanax stock and estimated restock inline on Torn Travel Agency
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -67,11 +67,11 @@ function describe(code){
  const d=info(code);
  if(!d.observed)return {text:'💊 Xanax · Stock data unavailable',kind:'warn'};
  const ageLabel=Number.isFinite(d.age)?Math.floor(d.age/60000)+'m old':'age unknown';
- const suffix=' · report '+ageLabel;
+ const suffix=' · '+ageLabel;
  if(d.stale)return {text:'💊 Xanax · Stale data ('+ageLabel+') · ETA unreliable',kind:'bad'};
- if(d.qty!==null&&d.qty>0)return {text:'💊 Xanax · '+d.qty.toLocaleString()+' reported in stock'+suffix,kind:d.fresh?'':'warn'};
- if(d.eta&&d.eta>Date.now())return {text:'💊 Xanax · ~restock '+remaining(d.eta-Date.now())+(d.estimated?' (model)':' (feed)')+suffix,kind:'warn'};
- return {text:'💊 Xanax · '+(d.qty===0?'Out of stock':'Stock unknown')+' · Restock ETA unknown'+suffix,kind:'warn'};
+ if(d.qty!==null&&d.qty>0)return {text:'💊 '+d.qty.toLocaleString()+' in stock'+suffix,kind:d.fresh?'':'warn'};
+ if(d.eta&&d.eta>Date.now())return {text:'💊 ETA ~'+remaining(d.eta-Date.now())+suffix,kind:'warn'};
+ return {text:'💊 '+(d.qty===0?'Out of stock':'Unknown stock')+suffix,kind:'warn'};
 }
 function countryFromText(text){
  const t=String(text||'').toLowerCase().replace(/\s+/g,' ').trim();
@@ -108,8 +108,12 @@ function update(){
   const badge=document.createElement('span');
   badge.className='lk-travel-radar';
   badge.dataset.code=code;
-  badge.style.cssText='display:block!important;position:relative!important;float:none!important;clear:both!important;width:auto!important;max-width:100%!important;margin:3px 0 0!important;font-size:10px!important;line-height:1.2!important;white-space:normal!important;pointer-events:none!important';
+  badge.style.cssText='display:block!important;position:absolute!important;left:0!important;bottom:1px!important;float:none!important;clear:both!important;width:100%!important;max-width:100%!important;margin:0!important;font-size:10px!important;line-height:1.1!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;pointer-events:none!important';
   target.appendChild(badge);
+  // Make room for the indicator inside the fixed-height Torn flight row.
+  target.style.setProperty('position','relative','important');
+  target.style.setProperty('padding-bottom','16px','important');
+  target.style.setProperty('box-sizing','border-box','important');
   seen.add(code);
  }
  for(const el of document.querySelectorAll('.lk-travel-radar')){
