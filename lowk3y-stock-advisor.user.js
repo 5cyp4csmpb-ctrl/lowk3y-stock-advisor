@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Stock Advisor
 // @namespace    lowk3y-stock-advisor
-// @version      1.7.0
+// @version      1.8.0
 // @description  Stock benefits, income ranking and alerts
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -48,7 +48,7 @@ catch { return {}; }
 };
 const state = Object.assign({
 x:12,y:180,budget:166000000,targets:{},history:{},
-values:{},owned:{SYM:500000},open:false,mode:'benefits',expanded:{},filter:'all',purchasePrices:{},lastHoldingsSync:null
+values:{},owned:{},open:false,mode:'benefits',expanded:{},filter:'all',purchasePrices:{},lastHoldingsSync:null
 },read());
 state.targets ||= {};
 state.history ||= {};
@@ -56,6 +56,7 @@ state.values ||= {};
 state.owned ||= {};
 state.expanded ||= {};
 state.purchasePrices ||= {};
+state.autoSync = true;
 if(!['all','affordable','roi','passive','owned'].includes(state.filter))state.filter='all';
 const save = () => {
 try { localStorage.setItem(STORAGE,JSON.stringify(state)); }
@@ -126,10 +127,8 @@ input{background:#1b3027;color:white;border:1px solid #47765c;border-radius:5px;
 <button class="btn" id="refresh">↻ Refresh</button>
 </div>
 <div id="status" class="muted"></div><div id="filters" class="filters"></div><div id="stocks"></div>
-<div class="note muted">Estimates only. Benefit quantities, schedules and cash rewards
-have not been independently verified; check them in Torn before
-investing. Share counts sync from Torn when available; reward values remain manual.
-Incremental yield uses the full next benefit increment, not additional spend.
+<div class="note muted">Stock block requirements and schedules follow Torn Wiki; prices and future returns are estimates. Verify rewards in Torn before investing. Share counts sync from Torn when available; reward values remain manual.
+Yield estimates assume the entered reward value stays constant; they exclude price changes, fees and missed collections.
 Alerts appear in this panel while the script is running.
 No automatic trading.</div>
 </section>`;
@@ -236,7 +235,7 @@ return;
 if(state.mode==='portfolio'){
 const holdings=stocks.filter(s=>Number(state.owned[s.symbol])>0);
 list.append(node('div',state.lastHoldingsSync
-?'🔄 API HOLDINGS · Last synced '+new Date(state.lastHoldingsSync).toLocaleTimeString()+' · Shares update automatically. Average purchase prices remain manual.'
+?'🔄 API HOLDINGS · Last synced '+new Date(state.lastHoldingsSync).toLocaleTimeString()+' · Shares update automatically. Cost basis is optional and manual.'
 :'⏳ Waiting for first API holdings sync. Previous manual holdings shown until verified.','note small'));
 if(holdingsError)list.append(node('div','⚠ Holdings sync: '+holdingsError+' · Previous holdings retained.','note small'));
 if(!holdings.length)list.append(node('div','No holdings found. If sync has not succeeded, open Benefits to enter shares manually.','note'));
@@ -260,6 +259,14 @@ else line(item,'Unrealised P/L','Enter purchase price');
 const benefit=BENEFITS[h.symbol];
 if(benefit){
 const next=requiredShares(h.symbol,benefit[0]);
+if(benefit[1]>0){
+const base=benefit[0],owned=shares;
+let blocks=0,threshold=base,increment=base;
+while(owned>=threshold&&blocks<25){blocks++;increment*=2;threshold+=increment;}
+line(item,'Active benefit blocks',String(blocks));
+}else{
+line(item,'Passive benefit threshold',shares>=benefit[0]?'Reached (7-day activation applies)':'Not yet reached');
+}
 line(item,'Shares to next benefit',money(next.additional));
 line(item,'Cost to next benefit',short(next.additional*h.price));
 }
@@ -391,11 +398,13 @@ const byId=new Map(stocks.map(s=>[Number(s.id),s.symbol]));
 const updated={};
 for(const entry of data.stocks){
 const id=Number(entry.id),qty=Number(entry.shares);
+if(entry.shares===null||entry.shares===undefined)throw Error('Missing shares for stock '+id);
 if(!Number.isSafeInteger(id)||!Number.isSafeInteger(qty)||qty<0)throw Error('Invalid holding entry');
 const symbol=byId.get(id);
 if(!symbol)throw Error('Unrecognised stock ID '+id);
 updated[symbol]=(updated[symbol]||0)+qty;
 }
+if(!stocks.length)throw Error('Stock price list unavailable');
 state.owned=updated;
 state.lastHoldingsSync=Date.now();
 holdingsError='';
@@ -430,7 +439,7 @@ alerts.push(symbol+' reached '+short(price));
 next.push({id,symbol,name:v.name||'Stock',price,change});
 state.history[id]={price,target,alerted:target>0&&price<=target};
 }
-if(!next.length)throw Error('No valid stock data');
+if(next.length<30)throw Error('Incomplete stock prices: '+next.length+' entries');
 stocks=next;
 save();render();
 el('updated').textContent='Updated '+new Date().toLocaleTimeString();
