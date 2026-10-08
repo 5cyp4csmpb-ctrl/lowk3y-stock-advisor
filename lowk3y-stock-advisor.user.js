@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         LowK3y Stock Advisor
 // @namespace    lowk3y-stock-advisor
-// @version      1.1.0
+// @version      1.2.0
 // @description  Stock benefits, income ranking and alerts
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
 // @run-at       document-end
 // @grant        none
+// @updateURL    https://raw.githubusercontent.com/5cyp4csmpb-ctrl/lowk3y-stock-advisor/main/lowk3y-stock-advisor.user.js
+// @downloadURL  https://raw.githubusercontent.com/5cyp4csmpb-ctrl/lowk3y-stock-advisor/main/lowk3y-stock-advisor.user.js
 // ==/UserScript==
 (async function () {
 'use strict';
@@ -94,9 +96,11 @@ input{background:#1b3027;color:white;border:1px solid #47765c;border-radius:5px;
 <button class="btn" id="refresh">↻ Refresh</button>
 </div>
 <div id="status" class="muted"></div><div id="stocks"></div>
-<div class="note muted">Estimates only. Reward values and owned shares
-must be entered manually. Prices do not predict
-future performance. Alerts work while active.
+<div class="note muted">Estimates only. Benefit quantities, schedules and cash rewards
+have not been independently verified; check them in Torn before
+investing. Enter your owned shares and reward values manually.
+Yield uses the full next-block holding value, not additional spend.
+Alerts appear in this panel while the script is running.
 No automatic trading.</div>
 </section>`;
 const el = id => root.getElementById(id);
@@ -191,12 +195,14 @@ const b=BENEFITS[s.symbol];
 if(!b)return {...s,benefit:null};
 const req=requiredShares(s.symbol,b[0]);
 const cost=req.additional*s.price;
-const value=Number(state.values[s.symbol] ?? b[3]);
-const annual=value>0 ? value*365/b[1] : null;
-const yieldPct=annual!==null
-? annual/(req.threshold===b[0] ? b[0]*s.price
-: (req.threshold-(req.additional))*s.price+cost)*100
-: null;
+const configured=state.values[s.symbol] ?? b[3];
+const value=configured==null ? null : Number(configured);
+const annual=Number.isFinite(value)&&value>0 ? value*365/b[1] : null;
+// Yield is measured against the full next-block holding value,
+// not only the additional cash needed to reach it.
+const holdingValue=req.threshold*s.price;
+const yieldPct=annual!==null && holdingValue>0
+? annual/holdingValue*100 : null;
 return {...s,benefit:b,req,cost,value,annual,yieldPct};
 });
 if(state.mode==='benefits'){
@@ -289,6 +295,8 @@ const prev=state.history[id]||{};
 const symbol=v.acronym||'#'+id;
 const target=Number(state.targets[id]);
 const change=prev.price>0?(price/prev.price-1)*100:null;
+// Notify on a downward crossing, including the first reading.
+// Reset the alert only after price rises above the target.
 if(target>0&&price<=target&&!prev.alerted)
 alerts.push(symbol+' reached '+short(price));
 next.push({id,symbol,name:v.name||'Stock',price,change});
