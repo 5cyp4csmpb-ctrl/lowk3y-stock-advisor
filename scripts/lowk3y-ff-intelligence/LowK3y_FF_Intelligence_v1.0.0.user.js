@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LowK3y FF Intelligence (Beta)
 // @namespace    lowk3y-industries
-// @version      1.2.2
-// @description  Compact colour-coded FFScouter estimates on player banners
+// @version      1.3.0
+// @description  Compact faction estimates and individual player profile FF panel
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
 // @run-at       document-end
@@ -10,7 +10,7 @@
 // ==/UserScript==
 (function(){
 'use strict';
-if(window.__lowk3yFF122)return;window.__lowk3yFF122=true;
+if(window.__lowk3yFF130)return;window.__lowk3yFF130=true;
 var KEYNAME='lowk3y-ff-key-v111',key='',cache=new Map(),busy=false,lastScan=0,setupPanel=null;
 try{key=localStorage.getItem(KEYNAME)||'';}catch(e){}
 function http(url){
@@ -31,7 +31,7 @@ function panel(message){
 }
 function btn(text,action){var b=document.createElement('button');b.type='button';b.textContent=text;b.style.cssText='margin-left:8px;padding:7px;background:white;color:#173c2b;border:0;border-radius:5px;font-weight:bold';b.onclick=action;setupPanel.appendChild(b);}
 function setup(){
- panel('LowK3y FF v1.2.2 — connect FFScouter');
+ panel('LowK3y FF v1.3.0 — connect FFScouter');
  btn('Connect',function(){
   if(!confirm('This script sends your FFScouter/Torn API key and player IDs directly to ffscouter.com to retrieve estimates. Review ffscouter.com data policy before agreeing. Continue?'))return;
   var entered=prompt('Enter your registered 16-character FFScouter API key. Do not share it in chat.','');
@@ -147,12 +147,48 @@ function fallback(map){
   });
  });
 }
+function profileId(){
+ var url=new URL(location.href);
+ if(!/^(profiles?\.php)$/i.test(url.pathname.split('/').pop()||'')&&!/^\/profile\//i.test(url.pathname))return null;
+ var match=url.pathname.match(/\/profile\/(\d+)/i);
+ var id=match?match[1]:(url.searchParams.get('XID')||url.searchParams.get('xid'));
+ return /^\d+$/.test(id||'')?Number(id):null;
+}
+function profileAnchor(){
+ return document.querySelector('#mainContainer, #main-container, .content-wrapper, .contentWrapper, #content, main')||document.body;
+}
+function profileRender(){
+ var id=profileId();
+ var old=document.getElementById('lowk3y-ff-profile');
+ if(!id){if(old)old.remove();return;}
+ var target=profileAnchor();
+ if(!target)return;
+ var card=old;
+ if(!card){
+  card=document.createElement('div');card.id='lowk3y-ff-profile';
+  card.style.cssText='display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:#202c29;color:#fff;border:1px solid #568773;border-radius:7px;padding:8px 10px;margin:8px 0;font:600 12px Arial,sans-serif;';
+  var title=document.createElement('span');title.textContent='LowK3y FF';title.style.cssText='color:#a4e4c4;font-weight:700';card.appendChild(title);
+  var est=document.createElement('span');est.className='lowk3y-profile-est';card.appendChild(est);
+  var ff=document.createElement('span');ff.className='lowk3y-profile-ff';card.appendChild(ff);
+ }
+ if(card.parentElement!==target)target.insertBefore(card,target.firstChild);
+ var data=cache.get(id),v=fmt(data);
+ var estEl=card.querySelector('.lowk3y-profile-est'),ffEl=card.querySelector('.lowk3y-profile-ff');
+ estEl.textContent='Est: '+(data?v.text:'Loading…');
+ estEl.style.cssText='border-radius:4px;padding:4px 7px;background:'+(Number.isFinite(v.n)?color(v.n):'#555')+';color:white;';
+ var fair=data&&data.fair_fight!=null?Number(data.fair_fight):NaN;
+ ffEl.textContent='FF: '+(Number.isFinite(fair)?fair.toFixed(2):'—');
+ ffEl.style.cssText='border:1px solid #789;border-radius:4px;padding:3px 6px;';
+ card.title='FFScouter estimate, not confirmed battle stats'+(data&&data.source?' | Source: '+data.source:'');
+}
 function draw(map){
  fallback(map);
+ profileRender();
 }
 async function scan(force){
  if(!key||busy)return;
- var map=collect(),ids=Array.from(map.keys());
+ var map=collect(),ids=Array.from(map.keys()),pid=profileId();
+ if(pid&&!ids.includes(pid))ids.push(pid);
  draw(map);
  var missing=ids.filter(function(id){return !cache.has(id);});
  if(!missing.length)return;
@@ -172,6 +208,7 @@ async function scan(force){
 }
 function start(){
  if(!key)setup();else scan();
+ profileRender();
  var pending=false;
  new MutationObserver(function(){if(pending)return;pending=true;setTimeout(function(){pending=false;var now=Date.now();if(now-lastScan>1500){lastScan=now;scan();}},800);}).observe(document.body||document.documentElement,{childList:true,subtree:true});
 }
