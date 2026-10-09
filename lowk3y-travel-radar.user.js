@@ -7,6 +7,8 @@
 // @match        https://torn.com/*
 // @run-at       document-end
 // @grant        none
+// @updateURL    https://raw.githubusercontent.com/5cyp4csmpb-ctrl/lowk3y-stock-advisor/main/lowk3y-travel-radar.user.js
+// @downloadURL  https://raw.githubusercontent.com/5cyp4csmpb-ctrl/lowk3y-stock-advisor/main/lowk3y-travel-radar.user.js
 // ==/UserScript==
 (()=>{
 'use strict';
