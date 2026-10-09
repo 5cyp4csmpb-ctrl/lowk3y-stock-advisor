@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LowK3y FF Intelligence (Beta)
 // @namespace    lowk3y-industries
-// @version      1.1.0
-// @description  Compact sample FF badge in faction rows; no API requests
+// @version      1.1.1
+// @description  Opt-in FFScouter estimate connection and compact inline badges for Torn PDA
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
 // @run-at       document-end
@@ -10,31 +10,103 @@
 // ==/UserScript==
 (function(){
 'use strict';
-if(document.getElementById('lowk3y-ff-v110'))return;
-function boot(){
- var panel=document.createElement('div');panel.id='lowk3y-ff-v110';
- panel.style.cssText='position:fixed;left:10px;bottom:75px;z-index:2147483647;background:#173c2b;color:white;border:2px solid #7ddd99;border-radius:9px;padding:10px;font:600 13px Arial,sans-serif;max-width:85vw';
- var status=document.createElement('span');status.textContent='LowK3y FF v1.1.0 — compact badge test';panel.appendChild(status);
- var btn=document.createElement('button');btn.type='button';btn.textContent=' Show compact FF';btn.style.cssText='margin-left:8px;padding:7px;background:white;color:#173c2b;border:0;border-radius:5px;font-weight:bold';panel.appendChild(btn);
- btn.addEventListener('click',function(){
-  var links=document.querySelectorAll('a[href*="profiles.php"],a[href*="profile.php"],a[href*="/profile/"]');
-  var ids=new Set(),tagged=0,small=0;
-  links.forEach(function(a){
-   var h=a.getAttribute('href')||'',m=h.match(/[?&]XID=(\d+)/i)||h.match(/\/profile\/(\d+)/i);
-   if(!m)return;ids.add(m[1]);
-   if(tagged>=8||!a.textContent.trim()||a.querySelector('.lowk3y-ff-mini'))return;
-   var rect=a.getBoundingClientRect();
-   if(rect.width<65||rect.height<18){small++;return;}
-   if(getComputedStyle(a).position==='static')a.style.position='relative';
-   var tag=document.createElement('span');
-   tag.className='lowk3y-ff-mini';tag.textContent='FF 1.5';
-   tag.title='Sample only; not a real FF estimate';
-   tag.style.cssText='position:absolute!important;right:2px!important;bottom:-3px!important;z-index:5!important;pointer-events:none!important;background:#146042!important;color:#fff!important;border:1px solid #6fbb96!important;border-radius:3px!important;padding:0 2px!important;font:700 8px/1.1 Arial,sans-serif!important;white-space:nowrap!important;';
-   a.appendChild(tag);tagged++;
-  });
-  status.textContent='IDs: '+ids.size+' | Mini badges: '+tagged+' | Small links: '+small;
+if(window.__lowk3yFF111)return;window.__lowk3yFF111=true;
+var KEYNAME='lowk3y-ff-key-v111',key='',cache=new Map(),busy=false,lastScan=0,setupPanel=null;
+try{key=localStorage.getItem(KEYNAME)||'';}catch(e){}
+function http(url){
+ if(typeof PDA_httpGet!=='function')return Promise.reject(new Error('PDA_httpGet not available'));
+ return Promise.resolve(PDA_httpGet(url)).then(function(x){
+  if(typeof x==='string')return JSON.parse(x);
+  if(x&&typeof x.responseText==='string')return JSON.parse(x.responseText);
+  if(x&&typeof x.body==='string')return JSON.parse(x.body);
+  if(x&&typeof x.response==='string')return JSON.parse(x.response);
+  return x;
  });
- (document.body||document.documentElement).appendChild(panel);
 }
-if(document.body)boot();else document.addEventListener('DOMContentLoaded',boot,{once:true});
+function panel(message){
+ if(!setupPanel){setupPanel=document.createElement('div');setupPanel.id='lowk3y-ff-setup';
+ setupPanel.style.cssText='position:fixed;left:10px;bottom:75px;z-index:2147483647;background:#173c2b;color:white;border:2px solid #7ddd99;border-radius:9px;padding:10px;font:600 13px Arial,sans-serif;max-width:85vw';
+ (document.body||document.documentElement).appendChild(setupPanel);}
+ setupPanel.textContent=message;return setupPanel;
+}
+function btn(text,action){var b=document.createElement('button');b.type='button';b.textContent=text;b.style.cssText='margin-left:8px;padding:7px;background:white;color:#173c2b;border:0;border-radius:5px;font-weight:bold';b.onclick=action;setupPanel.appendChild(b);}
+function setup(){
+ panel('LowK3y FF v1.1.1 — connect FFScouter');
+ btn('Connect',function(){
+  if(!confirm('This script sends your FFScouter/Torn API key and player IDs directly to ffscouter.com to retrieve estimates. Review ffscouter.com data policy before agreeing. Continue?'))return;
+  var entered=prompt('Enter your registered 16-character FFScouter API key. Do not share it in chat.','');
+  if(!entered)return;entered=entered.trim();
+  if(!/^[A-Za-z0-9]{16}$/.test(entered)){panel('Key must contain exactly 16 letters/numbers.');btn('Try again',setup);return;}
+  panel('Checking FFScouter registration…');
+  http('https://ffscouter.com/api/v1/check-key?key='+encodeURIComponent(entered)).then(function(data){
+   if(!data||data.is_registered!==true)throw new Error(data&&data.error||'Key not registered');
+   if(data.policy_update_required)throw new Error('Accept the latest FFScouter data policy on its website first');
+   key=entered;
+   try{localStorage.setItem(KEYNAME,key);}catch(e){panel('Key verified but browser storage unavailable; reconnect after reload.');}
+   if(setupPanel)setupPanel.remove();setupPanel=null;
+   scan(true);
+  }).catch(function(e){panel('Connection failed: '+String(e.message||e).slice(0,100));btn('Retry',setup);});
+ });
+}
+function collect(){
+ var map=new Map();
+ document.querySelectorAll('a[href*="profiles.php"],a[href*="profile.php"],a[href*="/profile/"]').forEach(function(a){
+  var h=a.getAttribute('href')||'',m=h.match(/[?&]XID=(\d+)/i)||h.match(/\/profile\/(\d+)/i);
+  if(!m||!a.textContent.trim())return;
+  var id=Number(m[1]);if(!map.has(id))map.set(id,[]);
+  map.get(id).push(a);
+ });
+ return map;
+}
+function color(n){
+ if(n<1000000)return '#216bb4';
+ if(n<10000000)return '#188f91';
+ if(n<100000000)return '#22844c';
+ if(n<1000000000)return '#b28a25';
+ if(n<10000000000)return '#b96025';
+ return '#a52c38';
+}
+function draw(map){
+ map.forEach(function(links,id){
+  var data=cache.get(id);if(!data)return;
+  links.forEach(function(a){
+   if(a.querySelector('.lowk3y-ff-est'))return;
+   var rect=a.getBoundingClientRect();if(rect.width<65||rect.height<18)return;
+   if(getComputedStyle(a).position==='static')a.style.position='relative';
+   var badge=document.createElement('span');badge.className='lowk3y-ff-est';
+   var n=Number(data.bs_estimate);
+   var has=Number.isFinite(n)&&n>0;
+   badge.textContent=has?(data.bs_estimate_human||Math.round(n).toLocaleString()):'N/A';
+   badge.title='LowK3y FF | Est: '+(has?badge.textContent:'unavailable')+' | FF: '+(data.fair_fight==null?'unknown':Number(data.fair_fight).toFixed(2))+' | Source: '+(data.source||'unknown');
+   badge.style.cssText='position:absolute!important;right:2px!important;bottom:-3px!important;z-index:5!important;pointer-events:none!important;background:'+(has?color(n):'#555')+'!important;color:#fff!important;border:1px solid #ddd8!important;border-radius:3px!important;padding:0 2px!important;font:700 8px/1.1 Arial,sans-serif!important;white-space:nowrap!important';
+   a.appendChild(badge);
+  });
+ });
+}
+async function scan(force){
+ if(!key||busy)return;
+ var map=collect(),ids=Array.from(map.keys());
+ draw(map);
+ var missing=ids.filter(function(id){return !cache.has(id);});
+ if(!missing.length)return;
+ busy=true;
+ try{
+  for(var i=0;i<missing.length;i+=100){
+   var chunk=missing.slice(i,i+100);
+   var url='https://ffscouter.com/api/v1/get-stats?key='+encodeURIComponent(key)+'&targets='+chunk.join(',');
+   var result=await http(url);
+   if(!Array.isArray(result))throw new Error(result&&result.error||'Unexpected API response');
+   result.forEach(function(x){if(x&&Number.isInteger(Number(x.player_id)))cache.set(Number(x.player_id),x);});
+   chunk.forEach(function(id){if(!cache.has(id))cache.set(id,{bs_estimate:null,fair_fight:null});});
+   draw(collect());
+  }
+ }catch(e){panel('FF lookup failed: '+String(e.message||e).slice(0,100));btn('Retry',function(){if(setupPanel)setupPanel.remove();setupPanel=null;scan(true);});}
+ finally{busy=false;}
+}
+function start(){
+ if(!key)setup();else scan();
+ var pending=false;
+ new MutationObserver(function(){if(pending)return;pending=true;setTimeout(function(){pending=false;var now=Date.now();if(now-lastScan>1500){lastScan=now;scan();}},800);}).observe(document.body||document.documentElement,{childList:true,subtree:true});
+}
+if(document.body)start();else document.addEventListener('DOMContentLoaded',start,{once:true});
 })();
