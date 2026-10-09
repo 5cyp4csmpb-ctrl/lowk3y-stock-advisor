@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Travel Radar
 // @namespace    lowk3y-travel-radar
-// @version      0.6.3
+// @version      0.6.4
 // @description  Xanax stock and estimated restock inline on Torn Travel Agency
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -31,9 +31,10 @@ async function get(url){
  if(typeof PDA_httpGet==='function'){
  const r=await PDA_httpGet(url);
  if(r==null)throw Error('Empty PDA response');
- if(typeof r==='string')return JSON.parse(r);
- if(typeof r.responseText==='string')return JSON.parse(r.responseText);
- if(typeof r.body==='string')return JSON.parse(r.body);
+ const parse=(value)=>{const t=value.trim();if(!t||!(t.startsWith('{')||t.startsWith('[')))throw Error('Non-JSON feed response');try{return JSON.parse(t)}catch(_){throw Error('Invalid JSON feed response')}};
+ if(typeof r==='string')return parse(r);
+ if(typeof r.responseText==='string')return parse(r.responseText);
+ if(typeof r.body==='string')return parse(r.body);
  return r;
  }
  const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);return r.json();
@@ -130,6 +131,8 @@ function update(){
  }
 }
 let busy=false;
+let yataRetryAt=0;
+const validXanax=e=>Array.isArray(e?.stocks)&&e.stocks.some(x=>Number(x.id)===206);
 function recordRestocks(next){
  for(const code of Object.values(COUNTRIES)){
   const e=next?.stocks?.[code],item=e?.stocks?.find(x=>Number(x.id)===206);
@@ -147,12 +150,13 @@ async function refresh(){
   // Prefer Prometheus; fall back to YATA if Prometheus is unavailable or lacks Xanax reports.
   let p=null,y=null;
   try{p=await get(PROM)}catch(e){console.warn('[LowK3y Travel Radar] Prometheus unavailable',e)}
-  try{y=await get(STOCK)}catch(e){console.warn('[LowK3y Travel Radar] YATA unavailable',e)}
+  const needsYata=Object.values(COUNTRIES).some(code=>!validXanax(p?.stocks?.[code]));
+  if(needsYata&&Date.now()>=yataRetryAt){try{y=await get(STOCK);yataRetryAt=0}catch(e){yataRetryAt=Date.now()+5*60000;console.warn('[LowK3y Travel Radar] YATA unavailable; retrying later:',e.message||e)}}
   if(!p?.stocks&&!y?.stocks)throw Error('Both stock feeds unavailable');
   const merged={stocks:{}};
   for(const code of Object.values(COUNTRIES)){
    const a=p?.stocks?.[code],b=y?.stocks?.[code];
-   const valid=e=>Array.isArray(e?.stocks)&&e.stocks.some(x=>Number(x.id)===206);
+   const valid=validXanax;
    const ap=valid(a)?parseTime(a.update):null,bp=valid(b)?parseTime(b.update):null;
    merged.stocks[code]=ap!==null&&(bp===null||ap>=bp)?a:(bp!==null?b:(valid(a)?a:(valid(b)?b:null)));
   }
