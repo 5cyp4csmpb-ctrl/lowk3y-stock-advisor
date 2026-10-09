@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y FF Intelligence (Beta)
 // @namespace    lowk3y-industries
-// @version      1.4.0
+// @version      1.4.1
 // @description  Compact FFScouter estimates on faction, search, hospital and player profile pages
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -12,8 +12,8 @@
 // ==/UserScript==
 (function(){
 'use strict';
-if(window.__lowk3yFF140)return;window.__lowk3yFF140=true;
-var KEYNAME='lowk3y-ff-key-v111',key='',cache=new Map(),busy=false,lastScan=0,setupPanel=null;
+if(window.__lowk3yFF141)return;window.__lowk3yFF141=true;
+var KEYNAME='lowk3y-ff-key-v111',key='',cache=new Map(),busy=false,lastScan=0,setupPanel=null,checkedAt=new Map(),REFRESH_MS=15*60*1000,RETRY_MS=2*60*1000;
 try{key=localStorage.getItem(KEYNAME)||'';}catch(e){}
 function http(url){
  if(typeof PDA_httpGet!=='function')return Promise.reject(new Error('PDA_httpGet not available'));
@@ -33,7 +33,7 @@ function panel(message){
 }
 function btn(text,action){var b=document.createElement('button');b.type='button';b.textContent=text;b.style.cssText='margin-left:8px;padding:7px;background:white;color:#173c2b;border:0;border-radius:5px;font-weight:bold';b.onclick=action;setupPanel.appendChild(b);}
 function setup(){
- panel('LowK3y FF v1.4.0 — connect FFScouter');
+ panel('LowK3y FF v1.4.1 — connect FFScouter');
  btn('Connect',function(){
   if(!confirm('This script sends your FFScouter/Torn API key and player IDs directly to ffscouter.com to retrieve estimates. Review ffscouter.com data policy before agreeing. Continue?'))return;
   var entered=prompt('Enter your registered 16-character FFScouter API key. Do not share it in chat.','');
@@ -158,7 +158,7 @@ function fallback(map){
    var v=fmt(data),badge=document.createElement('span');badge.className='lowk3y-ff-est';
    badge.textContent=v.text;
    var ff=data.fair_fight==null?NaN:Number(data.fair_fight);
-   badge.title='Estimated battle stats: '+v.text+(Number.isFinite(ff)?' | Est. multiplier: '+ff.toFixed(2):'')+' | FFScouter estimate';
+   badge.title='FFScouter estimate: '+v.text+(Number.isFinite(ff)?' | Est. multiplier: '+ff.toFixed(2):'')+' | Actual stats may be higher or lower. Last checked by LowK3y: '+(checkedAt.has(id)?new Date(checkedAt.get(id)).toLocaleTimeString():'unknown')+' (not FFScouter source age)';
    badge.style.cssText='position:absolute!important;right:2px!important;bottom:-3px!important;z-index:5!important;pointer-events:none!important;background:'+(Number.isFinite(v.n)?color(v.n):'#555')+'!important;color:#fff!important;border:1px solid #ddd8!important;border-radius:3px!important;padding:0 2px!important;font:700 8px/1.1 Arial,sans-serif!important;white-space:nowrap!important;';
    a.appendChild(badge);
   });
@@ -209,7 +209,7 @@ function profileRender(){
  var fair=data&&data.fair_fight!=null?Number(data.fair_fight):NaN;
  ffEl.textContent=Number.isFinite(fair)?fair.toFixed(2):'—';
  ffEl.style.cssText='border:1px solid #789;border-radius:4px;padding:3px 6px;';
- card.title='FFScouter estimate, not confirmed battle stats'+(data&&data.source?' | Source: '+data.source:'');
+ card.title='FFScouter estimate, not confirmed battle stats. Actual stats may be higher or lower. Last checked by LowK3y: '+(checkedAt.has(id)?new Date(checkedAt.get(id)).toLocaleTimeString():'unknown')+' (not the age of the underlying estimate)'+(data&&data.source?' | Source: '+data.source:'');
 }
 function draw(map){
  fallback(map);
@@ -220,7 +220,8 @@ async function scan(force){
  var map=collect(),ids=Array.from(map.keys()),pid=profileId();
  if(pid&&!ids.includes(pid))ids.push(pid);
  draw(map);
- var missing=ids.filter(function(id){return !cache.has(id);});
+ var now=Date.now();
+ var missing=ids.filter(function(id){return !checkedAt.has(id)||now-checkedAt.get(id)>=REFRESH_MS;});
  if(!missing.length)return;
  busy=true;
  try{
@@ -229,8 +230,9 @@ async function scan(force){
    var url='https://ffscouter.com/api/v1/get-stats?key='+encodeURIComponent(key)+'&targets='+chunk.join(',');
    var result=await http(url);
    if(!Array.isArray(result))throw new Error(result&&result.error||'Unexpected API response');
-   result.forEach(function(x){if(x&&Number.isInteger(Number(x.player_id)))cache.set(Number(x.player_id),x);});
-   chunk.forEach(function(id){if(!cache.has(id))cache.set(id,{bs_estimate:null,fair_fight:null});});
+   var received=new Set();
+   result.forEach(function(x){if(x&&Number.isInteger(Number(x.player_id))){var pid=Number(x.player_id);if(chunk.includes(pid)){cache.set(pid,x);checkedAt.set(pid,Date.now());received.add(pid);}}});
+   chunk.forEach(function(id){if(!received.has(id)){if(!cache.has(id))cache.set(id,{bs_estimate:null,fair_fight:null});checkedAt.set(id,Date.now()-REFRESH_MS+RETRY_MS);}});
    draw(collect());
   }
  }catch(e){panel('FF lookup failed: '+String(e.message||e).slice(0,100));btn('Retry',function(){if(setupPanel)setupPanel.remove();setupPanel=null;scan(true);});}
