@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LowK3y FF Intelligence (Beta)
 // @namespace    lowk3y-industries
-// @version      1.3.4
-// @description  Compact faction estimates and individual player profile FF panel
+// @version      1.4.0
+// @description  Compact FFScouter estimates on faction, search, hospital and player profile pages
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
 // @updateURL    https://raw.githubusercontent.com/5cyp4csmpb-ctrl/lowk3y-stock-advisor/main/scripts/lowk3y-ff-intelligence/LowK3y_FF_Intelligence_v1.0.0.user.js
@@ -12,7 +12,7 @@
 // ==/UserScript==
 (function(){
 'use strict';
-if(window.__lowk3yFF134)return;window.__lowk3yFF134=true;
+if(window.__lowk3yFF140)return;window.__lowk3yFF140=true;
 var KEYNAME='lowk3y-ff-key-v111',key='',cache=new Map(),busy=false,lastScan=0,setupPanel=null;
 try{key=localStorage.getItem(KEYNAME)||'';}catch(e){}
 function http(url){
@@ -33,7 +33,7 @@ function panel(message){
 }
 function btn(text,action){var b=document.createElement('button');b.type='button';b.textContent=text;b.style.cssText='margin-left:8px;padding:7px;background:white;color:#173c2b;border:0;border-radius:5px;font-weight:bold';b.onclick=action;setupPanel.appendChild(b);}
 function setup(){
- panel('LowK3y FF v1.3.4 — connect FFScouter');
+ panel('LowK3y FF v1.4.0 — connect FFScouter');
  btn('Connect',function(){
   if(!confirm('This script sends your FFScouter/Torn API key and player IDs directly to ffscouter.com to retrieve estimates. Review ffscouter.com data policy before agreeing. Continue?'))return;
   var entered=prompt('Enter your registered 16-character FFScouter API key. Do not share it in chat.','');
@@ -50,12 +50,24 @@ function setup(){
   }).catch(function(e){panel('Connection failed: '+String(e.message||e).slice(0,100));btn('Retry',setup);});
  });
 }
+function playerIdFromHref(h){
+ try{
+  var u=new URL(h,location.href);
+  if(u.origin!==location.origin)return null;
+  var p=u.pathname.toLowerCase();
+  if(!(/\/(?:profiles?\.php)$/.test(p)||/\/profile\/\d+/.test(p)))return null;
+  var m=p.match(/\/profile\/(\d+)/);
+  var id=m?m[1]:(u.searchParams.get('XID')||u.searchParams.get('xid')||u.searchParams.get('userId'));
+  return /^\d+$/.test(id||'')?Number(id):null;
+ }catch(e){return null;}
+}
 function collect(){
  var map=new Map();
  document.querySelectorAll('a[href*="profiles.php"],a[href*="profile.php"],a[href*="/profile/"]').forEach(function(a){
-  var h=a.getAttribute('href')||'',m=h.match(/[?&]XID=(\d+)/i)||h.match(/\/profile\/(\d+)/i);
-  if(!m||!a.textContent.trim())return;
-  var id=Number(m[1]);if(!map.has(id))map.set(id,[]);
+  if(a.closest('#lowk3y-ff-profile, #lowk3y-ff-setup'))return;
+  var id=playerIdFromHref(a.getAttribute('href')||'');
+  if(!id||!a.textContent.trim())return;
+  if(!map.has(id))map.set(id,[]);
   map.get(id).push(a);
  });
  return map;
@@ -139,11 +151,14 @@ function fallback(map){
   var data=cache.get(id);if(!data)return;
   links.forEach(function(a){
    if(a.querySelector('.lowk3y-ff-est'))return;
-   var rect=a.getBoundingClientRect();if(rect.width<65||rect.height<18)return;
+   var rect=a.getBoundingClientRect();
+   if(rect.width<48||rect.height<16||rect.width>500)return;
+   if(a.querySelector('button,input,textarea'))return;
    if(getComputedStyle(a).position==='static')a.style.position='relative';
    var v=fmt(data),badge=document.createElement('span');badge.className='lowk3y-ff-est';
    badge.textContent=v.text;
-   badge.title='Estimated battle stats: '+v.text;
+   var ff=data.fair_fight==null?NaN:Number(data.fair_fight);
+   badge.title='Estimated battle stats: '+v.text+(Number.isFinite(ff)?' | Est. multiplier: '+ff.toFixed(2):'')+' | FFScouter estimate';
    badge.style.cssText='position:absolute!important;right:2px!important;bottom:-3px!important;z-index:5!important;pointer-events:none!important;background:'+(Number.isFinite(v.n)?color(v.n):'#555')+'!important;color:#fff!important;border:1px solid #ddd8!important;border-radius:3px!important;padding:0 2px!important;font:700 8px/1.1 Arial,sans-serif!important;white-space:nowrap!important;';
    a.appendChild(badge);
   });
