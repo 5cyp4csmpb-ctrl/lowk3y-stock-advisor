@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y FF Intelligence (Beta)
 // @namespace    lowk3y-industries
-// @version      1.2.0
+// @version      1.2.1
 // @description  FFScouter live estimates in sortable faction Est column
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -10,7 +10,7 @@
 // ==/UserScript==
 (function(){
 'use strict';
-if(window.__lowk3yFF120)return;window.__lowk3yFF120=true;
+if(window.__lowk3yFF121)return;window.__lowk3yFF121=true;
 var KEYNAME='lowk3y-ff-key-v111',key='',cache=new Map(),busy=false,lastScan=0,setupPanel=null;
 try{key=localStorage.getItem(KEYNAME)||'';}catch(e){}
 function http(url){
@@ -31,7 +31,7 @@ function panel(message){
 }
 function btn(text,action){var b=document.createElement('button');b.type='button';b.textContent=text;b.style.cssText='margin-left:8px;padding:7px;background:white;color:#173c2b;border:0;border-radius:5px;font-weight:bold';b.onclick=action;setupPanel.appendChild(b);}
 function setup(){
- panel('LowK3y FF v1.2.0 — connect FFScouter');
+ panel('LowK3y FF v1.2.1 — connect FFScouter');
  btn('Connect',function(){
   if(!confirm('This script sends your FFScouter/Torn API key and player IDs directly to ffscouter.com to retrieve estimates. Review ffscouter.com data policy before agreeing. Continue?'))return;
   var entered=prompt('Enter your registered 16-character FFScouter API key. Do not share it in chat.','');
@@ -94,31 +94,33 @@ function locate(map){
  return rows.length>=3?rows:[];
 }
 function buildColumn(rows){
- var first=rows[0],row=first.row;
- var cells=Array.from(row.children);
- var levelIndex=cells.findIndex(function(c){return /^\\s*\\d{1,3}\\s*$/.test(c.textContent||'')&&Number(c.textContent.trim())<=100;});
- if(levelIndex<0)return false;
- var parent=row.parentElement,header=parent.previousElementSibling;
- if(!header||!header.children.length)return false;
- var heads=Array.from(header.children);
- var levelHead=heads.findIndex(function(c){return /^(lvl|level)$/i.test((c.textContent||'').trim());});
- if(levelHead<0)return false;
- var insertAt=levelHead+1;
- if(heads.some(function(c){return c.classList.contains('lowk3y-ff-colhead')||/^Est$/i.test((c.textContent||'').trim());}))return false;
- var template=heads[levelHead],head=template.cloneNode(false);
- head.className=(template.className||'')+' lowk3y-ff-colhead';
- head.textContent='Est';head.title='LowK3y estimated battle stats — tap to sort';
- head.style.cssText+=';cursor:pointer!important;min-width:62px!important;width:62px!important;text-align:center!important;';
- var anchor=heads[insertAt];if(anchor)header.insertBefore(head,anchor);else header.appendChild(head);
- rows.forEach(function(item){
-  var children=Array.from(item.row.children);
-  var source=children[levelIndex];if(!source)return;
-  var cell=source.cloneNode(false);cell.className=(source.className||'')+' lowk3y-ff-col';
-  cell.textContent='…';cell.style.cssText+=';min-width:62px!important;width:62px!important;text-align:center!important;color:white!important;font-weight:700!important;padding:0 2px!important;';
-  if(children[levelIndex+1])item.row.insertBefore(cell,children[levelIndex+1]);else item.row.appendChild(cell);
-  item.cell=cell;
+ var row=rows[0].row, parent=row.parentElement;
+ var header=Array.from(document.querySelectorAll('li,div,tr,[role="row"]')).find(function(el){
+  if(el.classList.contains('lowk3y-ff-colhead'))return false;
+  var t=(el.textContent||'').trim();
+  return t.length<140 && /\\bLvl\\b/i.test(t) && /\\bPosition\\b/i.test(t) && /\\bDays\\b/i.test(t) && /\\bStatus\\b/i.test(t);
  });
- var direction=1;
+ if(!header)return false;
+ var heads=Array.from(header.children),levelHead=heads.findIndex(function(el){return /\\bLvl\\b/i.test(el.textContent||'')});
+ if(levelHead<0)return false;
+ var sourceRow=Array.from(row.children),levelIndex=sourceRow.findIndex(function(el){return /^\\s*\\d{1,3}\\s*$/.test(el.textContent||'')});
+ if(levelIndex<0)return false;
+ if(header.querySelector('.lowk3y-ff-colhead'))return true;
+ var head=heads[levelHead].cloneNode(false);
+ head.className=(heads[levelHead].className||'')+' lowk3y-ff-colhead';
+ head.textContent='Est';head.title='Tap to sort estimated battle stats';
+ head.style.cssText+=';box-sizing:border-box!important;min-width:62px!important;width:62px!important;text-align:center!important;cursor:pointer!important;';
+ heads[levelHead].insertAdjacentElement('afterend',head);
+ rows.forEach(function(item){
+  var cells=Array.from(item.row.children),source=cells[levelIndex];
+  if(!source||item.row.querySelector('.lowk3y-ff-col'))return;
+  var cell=source.cloneNode(false);
+  cell.className=(source.className||'')+' lowk3y-ff-col';
+  cell.textContent='…';
+  cell.style.cssText+=';box-sizing:border-box!important;min-width:62px!important;width:62px!important;text-align:center!important;color:white!important;font-weight:700!important;padding:0 2px!important;';
+  source.insertAdjacentElement('afterend',cell);
+ });
+ var direction=-1;
  head.addEventListener('click',function(){
   direction*=-1;
   rows.slice().sort(function(a,b){
@@ -130,11 +132,26 @@ function buildColumn(rows){
  });
  return true;
 }
+function fallback(map){
+ map.forEach(function(links,id){
+  var data=cache.get(id);if(!data)return;
+  links.forEach(function(a){
+   if(a.querySelector('.lowk3y-ff-est'))return;
+   var rect=a.getBoundingClientRect();if(rect.width<65||rect.height<18)return;
+   if(getComputedStyle(a).position==='static')a.style.position='relative';
+   var v=fmt(data),badge=document.createElement('span');badge.className='lowk3y-ff-est';
+   badge.textContent=v.text;
+   badge.title='Estimated battle stats: '+v.text;
+   badge.style.cssText='position:absolute!important;right:2px!important;bottom:-3px!important;z-index:5!important;pointer-events:none!important;background:'+(Number.isFinite(v.n)?color(v.n):'#555')+'!important;color:#fff!important;border:1px solid #ddd8!important;border-radius:3px!important;padding:0 2px!important;font:700 10px/1.1 Arial,sans-serif!important;white-space:nowrap!important;';
+   a.appendChild(badge);
+  });
+ });
+}
 function draw(map){
  document.querySelectorAll('.lowk3y-ff-est').forEach(function(b){b.remove();});
  var rows=locate(map);
- if(!rows.length)return;
- if(!rows[0].row.querySelector('.lowk3y-ff-col'))buildColumn(rows);
+ if(!rows.length){fallback(map);return;}
+ if(!rows[0].row.querySelector('.lowk3y-ff-col')&&!buildColumn(rows)){fallback(map);return;}
  rows.forEach(function(item){
   var cell=item.row.querySelector('.lowk3y-ff-col');if(!cell)return;
   var data=cache.get(item.id),v=fmt(data);
