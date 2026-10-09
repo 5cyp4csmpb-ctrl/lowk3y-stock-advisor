@@ -1,16 +1,18 @@
 // ==UserScript==
 // @name         LowK3y FF Intelligence (Beta)
 // @namespace    lowk3y-industries
-// @version      1.3.3
+// @version      1.3.4
 // @description  Compact faction estimates and individual player profile FF panel
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
+// @updateURL    https://raw.githubusercontent.com/5cyp4csmpb-ctrl/lowk3y-stock-advisor/main/scripts/lowk3y-ff-intelligence/LowK3y_FF_Intelligence_v1.0.0.user.js
+// @downloadURL  https://raw.githubusercontent.com/5cyp4csmpb-ctrl/lowk3y-stock-advisor/main/scripts/lowk3y-ff-intelligence/LowK3y_FF_Intelligence_v1.0.0.user.js
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
 (function(){
 'use strict';
-if(window.__lowk3yFF133)return;window.__lowk3yFF133=true;
+if(window.__lowk3yFF134)return;window.__lowk3yFF134=true;
 var KEYNAME='lowk3y-ff-key-v111',key='',cache=new Map(),busy=false,lastScan=0,setupPanel=null;
 try{key=localStorage.getItem(KEYNAME)||'';}catch(e){}
 function http(url){
@@ -31,7 +33,7 @@ function panel(message){
 }
 function btn(text,action){var b=document.createElement('button');b.type='button';b.textContent=text;b.style.cssText='margin-left:8px;padding:7px;background:white;color:#173c2b;border:0;border-radius:5px;font-weight:bold';b.onclick=action;setupPanel.appendChild(b);}
 function setup(){
- panel('LowK3y FF v1.3.3 — connect FFScouter');
+ panel('LowK3y FF v1.3.4 — connect FFScouter');
  btn('Connect',function(){
   if(!confirm('This script sends your FFScouter/Torn API key and player IDs directly to ffscouter.com to retrieve estimates. Review ffscouter.com data policy before agreeing. Continue?'))return;
   var entered=prompt('Enter your registered 16-character FFScouter API key. Do not share it in chat.','');
