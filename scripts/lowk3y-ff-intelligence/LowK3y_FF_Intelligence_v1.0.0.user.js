@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LowK3y FF Intelligence (Beta)
 // @namespace    lowk3y-industries
-// @version      1.2.1
-// @description  FFScouter live estimates in sortable faction Est column
+// @version      1.2.2
+// @description  Compact colour-coded FFScouter estimates on player banners
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
 // @run-at       document-end
@@ -10,7 +10,7 @@
 // ==/UserScript==
 (function(){
 'use strict';
-if(window.__lowk3yFF121)return;window.__lowk3yFF121=true;
+if(window.__lowk3yFF122)return;window.__lowk3yFF122=true;
 var KEYNAME='lowk3y-ff-key-v111',key='',cache=new Map(),busy=false,lastScan=0,setupPanel=null;
 try{key=localStorage.getItem(KEYNAME)||'';}catch(e){}
 function http(url){
@@ -31,7 +31,7 @@ function panel(message){
 }
 function btn(text,action){var b=document.createElement('button');b.type='button';b.textContent=text;b.style.cssText='margin-left:8px;padding:7px;background:white;color:#173c2b;border:0;border-radius:5px;font-weight:bold';b.onclick=action;setupPanel.appendChild(b);}
 function setup(){
- panel('LowK3y FF v1.2.1 — connect FFScouter');
+ panel('LowK3y FF v1.2.2 — connect FFScouter');
  btn('Connect',function(){
   if(!confirm('This script sends your FFScouter/Torn API key and player IDs directly to ffscouter.com to retrieve estimates. Review ffscouter.com data policy before agreeing. Continue?'))return;
   var entered=prompt('Enter your registered 16-character FFScouter API key. Do not share it in chat.','');
@@ -142,23 +142,13 @@ function fallback(map){
    var v=fmt(data),badge=document.createElement('span');badge.className='lowk3y-ff-est';
    badge.textContent=v.text;
    badge.title='Estimated battle stats: '+v.text;
-   badge.style.cssText='position:absolute!important;right:2px!important;bottom:-3px!important;z-index:5!important;pointer-events:none!important;background:'+(Number.isFinite(v.n)?color(v.n):'#555')+'!important;color:#fff!important;border:1px solid #ddd8!important;border-radius:3px!important;padding:0 2px!important;font:700 10px/1.1 Arial,sans-serif!important;white-space:nowrap!important;';
+   badge.style.cssText='position:absolute!important;right:2px!important;bottom:-3px!important;z-index:5!important;pointer-events:none!important;background:'+(Number.isFinite(v.n)?color(v.n):'#555')+'!important;color:#fff!important;border:1px solid #ddd8!important;border-radius:3px!important;padding:0 2px!important;font:700 8px/1.1 Arial,sans-serif!important;white-space:nowrap!important;';
    a.appendChild(badge);
   });
  });
 }
 function draw(map){
- document.querySelectorAll('.lowk3y-ff-est').forEach(function(b){b.remove();});
- var rows=locate(map);
- if(!rows.length){fallback(map);return;}
- if(!rows[0].row.querySelector('.lowk3y-ff-col')&&!buildColumn(rows)){fallback(map);return;}
- rows.forEach(function(item){
-  var cell=item.row.querySelector('.lowk3y-ff-col');if(!cell)return;
-  var data=cache.get(item.id),v=fmt(data);
-  cell.textContent=data?v.text:'…';
-  cell.style.backgroundColor=Number.isFinite(v.n)?color(v.n):'#555';
-  cell.title='LowK3y FF | Est: '+v.text+' | FF: '+(data&&data.fair_fight!=null?Number(data.fair_fight).toFixed(2):'unknown')+' | Source: '+(data&&data.source||'unknown');
- });
+ fallback(map);
 }
 async function scan(force){
  if(!key||busy)return;
