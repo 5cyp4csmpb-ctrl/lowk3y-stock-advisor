@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y FF Intelligence (Beta)
 // @namespace    lowk3y-industries
-// @version      1.3.2
+// @version      1.3.3
 // @description  Compact faction estimates and individual player profile FF panel
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -10,7 +10,7 @@
 // ==/UserScript==
 (function(){
 'use strict';
-if(window.__lowk3yFF132)return;window.__lowk3yFF132=true;
+if(window.__lowk3yFF133)return;window.__lowk3yFF133=true;
 var KEYNAME='lowk3y-ff-key-v111',key='',cache=new Map(),busy=false,lastScan=0,setupPanel=null;
 try{key=localStorage.getItem(KEYNAME)||'';}catch(e){}
 function http(url){
@@ -31,7 +31,7 @@ function panel(message){
 }
 function btn(text,action){var b=document.createElement('button');b.type='button';b.textContent=text;b.style.cssText='margin-left:8px;padding:7px;background:white;color:#173c2b;border:0;border-radius:5px;font-weight:bold';b.onclick=action;setupPanel.appendChild(b);}
 function setup(){
- panel('LowK3y FF v1.3.2 — connect FFScouter');
+ panel('LowK3y FF v1.3.3 — connect FFScouter');
  btn('Connect',function(){
   if(!confirm('This script sends your FFScouter/Torn API key and player IDs directly to ffscouter.com to retrieve estimates. Review ffscouter.com data policy before agreeing. Continue?'))return;
   var entered=prompt('Enter your registered 16-character FFScouter API key. Do not share it in chat.','');
@@ -181,7 +181,7 @@ function profileRender(){
   card.style.cssText='display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:#202c29;color:#fff;border:1px solid #568773;border-radius:7px;padding:8px 10px;margin:8px 10px;font:600 12px Arial,sans-serif;';
   var title=document.createElement('span');title.textContent='Battle Stats';title.style.cssText='color:#a4e4c4;font-weight:700';card.appendChild(title);
   var est=document.createElement('span');est.className='lowk3y-profile-est';card.appendChild(est);
-  var multiplierLabel=document.createElement('span');multiplierLabel.textContent='Multiplier';multiplierLabel.className='lowk3y-profile-multiplier-label';multiplierLabel.style.cssText='margin-left:10px;color:#a4e4c4;font-weight:700;';card.appendChild(multiplierLabel);
+  var multiplierLabel=document.createElement('span');multiplierLabel.textContent='Est. Multiplier';multiplierLabel.className='lowk3y-profile-multiplier-label';multiplierLabel.style.cssText='margin-left:10px;color:#a4e4c4;font-weight:700;';card.appendChild(multiplierLabel);
   var ff=document.createElement('span');ff.className='lowk3y-profile-ff';card.appendChild(ff);
  }
  if(card.parentElement!==target.parent||card.nextSibling!==target.before)target.parent.insertBefore(card,target.before);
