@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Travel Radar
 // @namespace    lowk3y-travel-radar
-// @version      0.6.2
+// @version      0.6.3
 // @description  Xanax stock and estimated restock inline on Torn Travel Agency
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -71,7 +71,7 @@ function describe(code){
  const d=info(code);
  if(!d.observed)return {text:'💊 Xanax · Stock data unavailable',kind:'warn'};
  const ageLabel=Number.isFinite(d.age)?Math.floor(d.age/60000)+'m old':'age unknown';
- const lastText=d.last?' · Last '+(d.lastObserved?'':'~')+clock(d.last):'';
+ const lastText=d.last?' · Last '+(d.lastObserved?'':'~')+clock(d.last):' · Last restock unknown';
  const suffix=lastText+' · '+ageLabel;
  if(d.stale)return {text:'💊 Stale ('+ageLabel+')'+lastText,kind:'bad'};
  if(d.qty!==null&&d.qty>0)return {text:'💊 '+d.qty.toLocaleString()+' in stock'+suffix,kind:d.fresh?'':'warn'};
