@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y FF Intelligence (Beta)
 // @namespace    lowk3y-industries
-// @version      1.0.0
+// @version      1.0.1
 // @description  Inline FFScouter estimates beside Torn player links. Read-only, opt-in, no floating button.
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -21,7 +21,9 @@
   const attached = new WeakSet();
   let busy = false;
   let retryAfter = 0;
-  let apiKey = GM_getValue(STORE_KEY, '');
+  const readKey = () => { try { return localStorage.getItem(STORE_KEY) || ''; } catch { return ''; } };
+  const saveKey = value => { try { localStorage.setItem(STORE_KEY, value); return true; } catch { return false; } };
+  let apiKey = readKey();
   const style = document.createElement('style');
   style.textContent = `.lowk3y-ffi-tag{display:inline-block;margin-left:4px;padding:1px 4px;border-radius:4px;font:600 10px/1.4 system-ui,sans-serif;vertical-align:middle;white-space:nowrap;background:#293444;color:#eee}.lowk3y-ffi-good{background:#19543b;color:#d3ffe4}.lowk3y-ffi-mid{background:#69501a;color:#fff0b5}.lowk3y-ffi-low{background:#6b2830;color:#ffe1e1}`;
   document.documentElement.append(style);
@@ -67,7 +69,7 @@
   }
   function request(url) {
     return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({ method: 'GET', url, timeout: 12000,
+      if (typeof PDA_httpGet === 'function') {\n        PDA_httpGet(url).then(r => {\n          const status = Number(r.status || 200);\n          if (status !== 200) throw new Error(`HTTP ${status}`);\n          resolve(typeof r.response === 'string' ? JSON.parse(r.response) : typeof r.body === 'string' ? JSON.parse(r.body) : r);\n        }).catch(reject);\n        return;\n      }\n      if (typeof GM_xmlhttpRequest !== 'function') { reject(new Error('No HTTP transport available')); return; }\n      GM_xmlhttpRequest({ method: 'GET', url, timeout: 12000,
         onload: r => {
           if (r.status === 429) { retryAfter = Date.now() + 60000; return reject(new Error('Rate limited')); }
           if (r.status !== 200) return reject(new Error(`HTTP ${r.status}`));
@@ -105,10 +107,10 @@
     if (!key) return;
     if (!/^[a-zA-Z0-9]{16}$/.test(key.trim())) { alert('Invalid key format. No key was saved.'); return; }
     apiKey = key.trim();
-    GM_setValue(STORE_KEY, apiKey);
+    if (!saveKey(apiKey)) { alert('Could not save key in browser storage.'); return; }
     scan();
   }
-  if (!apiKey) setTimeout(setup, 1200);
+  if (!apiKey) {\n    const launch = () => {\n      const el = document.createElement('button');\n      el.textContent = 'Set up LowK3y FF';\n      el.setAttribute('aria-label', 'Set up LowK3y FF Intelligence');\n      el.style.cssText = 'position:fixed;bottom:12px;left:12px;z-index:2147483647;padding:10px;border-radius:8px;background:#204c38;color:white;border:1px solid #75a98a;font:600 13px system-ui';\n      el.addEventListener('click', () => { setup(); if (apiKey) el.remove(); });\n      (document.body || document.documentElement).append(el);\n    };\n    if (document.body) launch(); else document.addEventListener('DOMContentLoaded', launch, {once:true});\n  }
   else scan();
   let scheduled = false;
   new MutationObserver(() => {
@@ -116,5 +118,5 @@
     scheduled = true;
     setTimeout(() => { scheduled = false; scan(); }, 500);
   }).observe(document.body || document.documentElement, { childList: true, subtree: true });
-  console.info('[LowK3y FF Intelligence] Beta v1.0.0 loaded');
+  console.info('[LowK3y FF Intelligence] Beta v1.0.1 loaded');
 })();
