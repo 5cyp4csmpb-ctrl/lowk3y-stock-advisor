@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y FF Intelligence (Beta)
 // @namespace    lowk3y-industries
-// @version      1.4.2
+// @version      1.4.3
 // @description  Compact FFScouter estimates on faction, search, hospital and player profile pages
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -12,7 +12,7 @@
 // ==/UserScript==
 (function(){
 'use strict';
-if(window.__lowk3yFF142)return;window.__lowk3yFF142=true;
+if(window.__lowk3yFF143)return;window.__lowk3yFF143=true;
 var KEYNAME='lowk3y-ff-key-v111',key='',cache=new Map(),busy=false,lastScan=0,setupPanel=null,checkedAt=new Map(),REFRESH_MS=15*60*1000,RETRY_MS=2*60*1000;
 try{key=localStorage.getItem(KEYNAME)||'';}catch(e){}
 function http(url){
@@ -33,7 +33,7 @@ function panel(message){
 }
 function btn(text,action){var b=document.createElement('button');b.type='button';b.textContent=text;b.style.cssText='margin-left:8px;padding:7px;background:white;color:#173c2b;border:0;border-radius:5px;font-weight:bold';b.onclick=action;setupPanel.appendChild(b);}
 function setup(){
- panel('LowK3y FF v1.4.2 — connect FFScouter');
+ panel('LowK3y FF v1.4.3 — connect FFScouter');
  btn('Connect',function(){
   if(!confirm('This script sends your FFScouter/Torn API key and player IDs directly to ffscouter.com to retrieve estimates. Review ffscouter.com data policy before agreeing. Continue?'))return;
   var entered=prompt('Enter your registered 16-character FFScouter API key. Do not share it in chat.','');
@@ -61,21 +61,25 @@ function playerIdFromHref(h){
   return /^\d+$/.test(id||'')?Number(id):null;
  }catch(e){return null;}
 }
+function sharedProfileUrl(a){
+ var t=(a.textContent||'').replace(/\s+/g,'').trim();
+ return /(?:https?:\/\/)?(?:www\.)?torn\.com\/(?:profiles?\.php|profile\/)/i.test(t);
+}
 function inChat(a){
  var el=a;
  for(var i=0;i<9&&el&&el!==document.body;i++,el=el.parentElement){
   var marker=((typeof el.className==='string'?el.className:'')+' '+(el.id||'')).toLowerCase();
-  if(marker.indexOf('chat')!==-1)return true;
+  if(marker.indexOf('chat')!==-1||marker.indexOf('message')!==-1||marker.indexOf('conversation')!==-1)return true;
  }
  return false;
 }
 function clearChatBadges(){
- document.querySelectorAll('.lowk3y-ff-est').forEach(function(b){if(inChat(b))b.remove();});
+ document.querySelectorAll('.lowk3y-ff-est').forEach(function(b){if(inChat(b)||sharedProfileUrl(b.parentElement))b.remove();});
 }
 function collect(){
  var map=new Map();
  document.querySelectorAll('a[href*="profiles.php"],a[href*="profile.php"],a[href*="/profile/"]').forEach(function(a){
-  if(a.closest('#lowk3y-ff-profile, #lowk3y-ff-setup')||inChat(a))return;
+  if(a.closest('#lowk3y-ff-profile, #lowk3y-ff-setup')||inChat(a)||sharedProfileUrl(a))return;
   var id=playerIdFromHref(a.getAttribute('href')||'');
   if(!id||!a.textContent.trim())return;
   if(!map.has(id))map.set(id,[]);
@@ -162,7 +166,7 @@ function fallback(map){
  map.forEach(function(links,id){
   var data=cache.get(id);if(!data)return;
   links.forEach(function(a){
-   if(inChat(a)||a.querySelector('.lowk3y-ff-est'))return;
+   if(inChat(a)||sharedProfileUrl(a)||a.querySelector('.lowk3y-ff-est'))return;
    var rect=a.getBoundingClientRect();
    if(rect.width<48||rect.height<16||rect.width>500)return;
    if(a.querySelector('button,input,textarea'))return;
