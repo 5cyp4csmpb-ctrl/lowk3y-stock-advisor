@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y FF Intelligence (Beta)
 // @namespace    lowk3y-industries
-// @version      1.4.4
+// @version      1.5.0
 // @description  Compact FFScouter estimates on faction, search, hospital and player profile pages
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -12,9 +12,14 @@
 // ==/UserScript==
 (function(){
 'use strict';
-if(window.__lowk3yFF144)return;window.__lowk3yFF144=true;
-var KEYNAME='lowk3y-ff-key-v111',key='',cache=new Map(),busy=false,lastScan=0,setupPanel=null,checkedAt=new Map(),REFRESH_MS=60*60*1000,RETRY_MS=10*60*1000,backoffUntil=0,lastRequest=0,MIN_GAP=12000;
-try{key=localStorage.getItem(KEYNAME)||'';}catch(e){}
+if(window.__lowk3yFF150)return;window.__lowk3yFF150=true;
+var KEYNAME='lowk3y-ff-key-v111',key='',cache=new Map(),busy=false,lastScan=0,setupPanel=null,checkedAt=new Map(),REFRESH_MS=60*60*1000,RETRY_MS=10*60*1000,backoffUntil=0,lastRequest=0,MIN_GAP=20000,MAX_BATCH=50,STORAGE='lowk3y-ff-cache-v150',BACKOFF='lowk3y-ff-backoff-v150',MAX_ENTRIES=300;
+try{key=localStorage.getItem(KEYNAME)||'';backoffUntil=Number(localStorage.getItem(BACKOFF))||0;var saved=JSON.parse(localStorage.getItem(STORAGE)||'[]');if(Array.isArray(saved))saved.slice(-MAX_ENTRIES).forEach(function(item){if(Array.isArray(item)&&Number.isInteger(item[0])&&item[1]&&typeof item[1]==='object'&&Number.isFinite(item[2])){cache.set(item[0],item[1]);checkedAt.set(item[0],item[2]);}});}catch(e){}
+function persist(){
+ try{var rows=Array.from(cache.keys()).filter(function(id){return checkedAt.has(id);}).map(function(id){return [id,cache.get(id),checkedAt.get(id)];}).sort(function(a,b){return a[2]-b[2];}).slice(-MAX_ENTRIES);localStorage.setItem(STORAGE,JSON.stringify(rows));}catch(e){}
+}
+function pause(ms){backoffUntil=Date.now()+ms;try{localStorage.setItem(BACKOFF,String(backoffUntil));}catch(e){}}
+
 function http(url){
  if(typeof PDA_httpGet!=='function')return Promise.reject(new Error('PDA_httpGet not available'));
  return Promise.resolve(PDA_httpGet(url)).then(function(x){
@@ -33,7 +38,7 @@ function panel(message){
 }
 function btn(text,action){var b=document.createElement('button');b.type='button';b.textContent=text;b.style.cssText='margin-left:8px;padding:7px;background:white;color:#173c2b;border:0;border-radius:5px;font-weight:bold';b.onclick=action;setupPanel.appendChild(b);}
 function setup(){
- panel('LowK3y FF v1.4.4 — connect FFScouter');
+ panel('LowK3y FF v1.5.0 — connect FFScouter');
  btn('Connect',function(){
   if(!confirm('This script sends your FFScouter/Torn API key and player IDs directly to ffscouter.com to retrieve estimates. Review ffscouter.com data policy before agreeing. Continue?'))return;
   var entered=prompt('Enter your registered 16-character FFScouter API key. Do not share it in chat.','');
@@ -232,17 +237,18 @@ function draw(map){
  profileRender();
 }
 async function scan(force){
- if(!key||busy||Date.now()<backoffUntil)return;
+ if(!key||busy)return;
  var map=collect(),ids=Array.from(map.keys()),pid=profileId();
  if(pid&&!ids.includes(pid))ids.push(pid);
  draw(map);
+ if(Date.now()<backoffUntil)return;
  var now=Date.now();
- var missing=ids.filter(function(id){return !checkedAt.has(id)||now-checkedAt.get(id)>=REFRESH_MS;}).slice(0,100);
+ var missing=ids.filter(function(id){return !checkedAt.has(id)||now-checkedAt.get(id)>=REFRESH_MS;}).slice(0,MAX_BATCH);
  if(!missing.length)return;
  busy=true;
  try{
-  for(var i=0;i<missing.length;i+=100){
-   var chunk=missing.slice(i,i+100);
+  for(var i=0;i<missing.length;i+=MAX_BATCH){
+   var chunk=missing.slice(i,i+MAX_BATCH);
    var url='https://ffscouter.com/api/v1/get-stats?key='+encodeURIComponent(key)+'&targets='+chunk.join(',');
    var wait=Math.max(0,MIN_GAP-(Date.now()-lastRequest));
    if(wait)await new Promise(function(resolve){setTimeout(resolve,wait);});
@@ -252,15 +258,16 @@ async function scan(force){
    var received=new Set();
    result.forEach(function(x){if(x&&Number.isInteger(Number(x.player_id))){var pid=Number(x.player_id);if(chunk.includes(pid)){cache.set(pid,x);checkedAt.set(pid,Date.now());received.add(pid);}}});
    chunk.forEach(function(id){if(!received.has(id)){if(!cache.has(id))cache.set(id,{bs_estimate:null,fair_fight:null});checkedAt.set(id,Date.now()-REFRESH_MS+RETRY_MS);}});
+   persist();
    draw(collect());
   }
  }catch(e){
   var msg=String(e.message||e);
-  if(/too many requests|rate.limit|\\b429\\b/i.test(msg)){
-   backoffUntil=Date.now()+60*60*1000;
+  if(/too many requests|rate.limit|429/i.test(msg)){
+   pause(2*60*60*1000);
    console.warn('[LowK3y FF] Rate limited; pausing requests for one hour.');
   }else{
-   backoffUntil=Date.now()+RETRY_MS;
+   pause(RETRY_MS);
    console.warn('[LowK3y FF] Lookup paused:',msg.slice(0,100));
   }
  }
@@ -270,7 +277,7 @@ function start(){
  if(!key)setup();else scan();
  profileRender();
  var pending=false;
- new MutationObserver(function(){if(pending)return;pending=true;setTimeout(function(){pending=false;var now=Date.now();if(now-lastScan>1500){lastScan=now;scan();}},800);}).observe(document.body||document.documentElement,{childList:true,subtree:true});
+ new MutationObserver(function(){if(pending)return;pending=true;setTimeout(function(){pending=false;var now=Date.now();if(now-lastScan>5000){lastScan=now;scan();}},800);}).observe(document.body||document.documentElement,{childList:true,subtree:true});
 }
 if(document.body)start();else document.addEventListener('DOMContentLoaded',start,{once:true});
 })();
