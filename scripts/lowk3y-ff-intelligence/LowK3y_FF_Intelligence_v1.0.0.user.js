@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y FF Intelligence (Beta)
 // @namespace    lowk3y-industries
-// @version      1.4.3
+// @version      1.4.4
 // @description  Compact FFScouter estimates on faction, search, hospital and player profile pages
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -12,8 +12,8 @@
 // ==/UserScript==
 (function(){
 'use strict';
-if(window.__lowk3yFF143)return;window.__lowk3yFF143=true;
-var KEYNAME='lowk3y-ff-key-v111',key='',cache=new Map(),busy=false,lastScan=0,setupPanel=null,checkedAt=new Map(),REFRESH_MS=15*60*1000,RETRY_MS=2*60*1000;
+if(window.__lowk3yFF144)return;window.__lowk3yFF144=true;
+var KEYNAME='lowk3y-ff-key-v111',key='',cache=new Map(),busy=false,lastScan=0,setupPanel=null,checkedAt=new Map(),REFRESH_MS=60*60*1000,RETRY_MS=10*60*1000,backoffUntil=0,lastRequest=0,MIN_GAP=12000;
 try{key=localStorage.getItem(KEYNAME)||'';}catch(e){}
 function http(url){
  if(typeof PDA_httpGet!=='function')return Promise.reject(new Error('PDA_httpGet not available'));
@@ -33,7 +33,7 @@ function panel(message){
 }
 function btn(text,action){var b=document.createElement('button');b.type='button';b.textContent=text;b.style.cssText='margin-left:8px;padding:7px;background:white;color:#173c2b;border:0;border-radius:5px;font-weight:bold';b.onclick=action;setupPanel.appendChild(b);}
 function setup(){
- panel('LowK3y FF v1.4.3 — connect FFScouter');
+ panel('LowK3y FF v1.4.4 — connect FFScouter');
  btn('Connect',function(){
   if(!confirm('This script sends your FFScouter/Torn API key and player IDs directly to ffscouter.com to retrieve estimates. Review ffscouter.com data policy before agreeing. Continue?'))return;
   var entered=prompt('Enter your registered 16-character FFScouter API key. Do not share it in chat.','');
@@ -232,18 +232,21 @@ function draw(map){
  profileRender();
 }
 async function scan(force){
- if(!key||busy)return;
+ if(!key||busy||Date.now()<backoffUntil)return;
  var map=collect(),ids=Array.from(map.keys()),pid=profileId();
  if(pid&&!ids.includes(pid))ids.push(pid);
  draw(map);
  var now=Date.now();
- var missing=ids.filter(function(id){return !checkedAt.has(id)||now-checkedAt.get(id)>=REFRESH_MS;});
+ var missing=ids.filter(function(id){return !checkedAt.has(id)||now-checkedAt.get(id)>=REFRESH_MS;}).slice(0,100);
  if(!missing.length)return;
  busy=true;
  try{
   for(var i=0;i<missing.length;i+=100){
    var chunk=missing.slice(i,i+100);
    var url='https://ffscouter.com/api/v1/get-stats?key='+encodeURIComponent(key)+'&targets='+chunk.join(',');
+   var wait=Math.max(0,MIN_GAP-(Date.now()-lastRequest));
+   if(wait)await new Promise(function(resolve){setTimeout(resolve,wait);});
+   lastRequest=Date.now();
    var result=await http(url);
    if(!Array.isArray(result))throw new Error(result&&result.error||'Unexpected API response');
    var received=new Set();
@@ -251,7 +254,16 @@ async function scan(force){
    chunk.forEach(function(id){if(!received.has(id)){if(!cache.has(id))cache.set(id,{bs_estimate:null,fair_fight:null});checkedAt.set(id,Date.now()-REFRESH_MS+RETRY_MS);}});
    draw(collect());
   }
- }catch(e){panel('FF lookup failed: '+String(e.message||e).slice(0,100));btn('Retry',function(){if(setupPanel)setupPanel.remove();setupPanel=null;scan(true);});}
+ }catch(e){
+  var msg=String(e.message||e);
+  if(/too many requests|rate.limit|\\b429\\b/i.test(msg)){
+   backoffUntil=Date.now()+60*60*1000;
+   console.warn('[LowK3y FF] Rate limited; pausing requests for one hour.');
+  }else{
+   backoffUntil=Date.now()+RETRY_MS;
+   console.warn('[LowK3y FF] Lookup paused:',msg.slice(0,100));
+  }
+ }
  finally{busy=false;}
 }
 function start(){
