@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Travel Radar
 // @namespace    lowk3y-travel-radar
-// @version      0.7.0
+// @version      0.7.1
 // @description  Xanax stock and estimated restock inline on Torn Travel Agency
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -85,21 +85,22 @@ function describe(code){
 // New Torn travel agency uses a destination selector and map, not country rows.
 const COUNTRY_LABELS=[['Canada','can'],['United Kingdom','uni'],['Japan','jap'],['South Africa','sou']];
 function onTravelPage(){
- return /travelagency/i.test(location.pathname)||Array.from(document.querySelectorAll('h1,h2,h3,div,span')).some(n=>n.children.length===0&&/^(Travel Agency|Select Destination and Traveling Method)$/i.test((n.textContent||'').trim()));
+ const path=location.pathname.toLowerCase();
+ return path.includes('travelagency')||path.includes('travel.php')||!!Array.from(document.querySelectorAll('div,span,h1,h2,h3,strong')).find(n=>n.children.length===0&&/select destination and traveling method/i.test(n.textContent||''));
 }
 function update(){
  const old=document.getElementById('lk-travel-radar-panel');
  if(!onTravelPage()){if(old)old.remove();return;}
  let panel=old;
  if(!panel){
-  const heading=Array.from(document.querySelectorAll('h1,h2,h3,div,span,strong')).find(n=>n.children.length===0&&(n.textContent||'').trim()==='Select Destination and Traveling Method');
-  if(!heading)return;
-  const block=heading.parentElement;
-  if(!block||!block.parentElement)return;
+  const heading=Array.from(document.querySelectorAll('div,span,h1,h2,h3,strong')).find(n=>n.children.length===0&&/select destination and traveling method/i.test((n.textContent||'').trim()));
+  const block=heading?.closest('section')||heading?.parentElement?.parentElement;
+  const mount=block?.parentElement;
+  if(!block||!mount)return;
   panel=document.createElement('section');
   panel.id='lk-travel-radar-panel';
   panel.setAttribute('aria-label','LowK3y Xanax Travel Radar');
-  block.parentElement.insertBefore(panel,block);
+  mount.insertBefore(panel,block);
  }
  const rows=COUNTRY_LABELS.map(([name,code])=>{
   const d=describe(code);
