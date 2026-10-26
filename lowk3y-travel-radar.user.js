@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Travel Radar
 // @namespace    lowk3y-travel-radar
-// @version      0.6.4
+// @version      0.7.0
 // @description  Xanax stock and estimated restock inline on Torn Travel Agency
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -26,6 +26,7 @@ let stock=null,model=null,loadedAt=0,error='';
 try{const c=JSON.parse(localStorage.getItem(CACHE)||'null');if(c&&Date.now()-c.t<900000){stock=c.stock;model=c.model;loadedAt=c.t;}}catch(e){}
 const css=document.createElement('style');
 css.textContent='.lk-travel-radar{display:block!important;position:relative!important;clear:both!important;width:100%!important;box-sizing:border-box!important;font-size:10px!important;line-height:1.25!important;margin:3px 0 0!important;padding:0!important;font-weight:500!important;color:#9bdcb3!important;white-space:normal!important;pointer-events:none!important;overflow-wrap:anywhere!important}.lk-travel-radar.warn{color:#f4c47a!important}.lk-travel-radar.bad{color:#e89a9a!important}.lk-travel-radar small{color:#b8b8b8!important;font-size:10px!important}';
+css.textContent+=' #lk-travel-radar-panel{box-sizing:border-box;background:#252525;border:1px solid #555;border-radius:8px;color:#eee;margin:10px 4px;padding:10px 12px;font:13px/1.4 Arial,sans-serif}#lk-travel-radar-panel .lk-radar-title{font-weight:700;font-size:14px;margin-bottom:8px}#lk-travel-radar-panel .lk-radar-title span{display:block;font-size:10px;color:#aaa;font-weight:400}#lk-travel-radar-panel .lk-radar-row{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 10px;padding:7px 0;border-top:1px solid #444}#lk-travel-radar-panel .lk-radar-row strong{font-size:12px}#lk-travel-radar-panel .lk-radar-status{font-size:11px;color:#9bdcb3}#lk-travel-radar-panel .lk-radar-status.warn{color:#f4c47a}#lk-travel-radar-panel .lk-radar-status.bad{color:#e89a9a}';
 (document.head||document.documentElement).append(css);
 async function get(url){
  if(typeof PDA_httpGet==='function'){
@@ -81,53 +82,45 @@ function describe(code){
  if(d.eta&&d.eta>Date.now())return {text:'💊 ETA ~'+remaining(d.eta-Date.now())+lastText,kind:'warn'};
  return {text:'💊 '+(d.qty===0?'Out of stock':'Unknown stock')+suffix,kind:'warn'};
 }
-function countryFromText(text){
- const t=String(text||'').toLowerCase().replace(/\s+/g,' ').trim();
- for(const [name,code] of Object.entries(COUNTRIES))if(t.includes(name))return code;
- return null;
+// New Torn travel agency uses a destination selector and map, not country rows.
+const COUNTRY_LABELS=[['Canada','can'],['United Kingdom','uni'],['Japan','jap'],['South Africa','sou']];
+function onTravelPage(){
+ return /travelagency/i.test(location.pathname)||Array.from(document.querySelectorAll('h1,h2,h3,div,span')).some(n=>n.children.length===0&&/^(Travel Agency|Select Destination and Traveling Method)$/i.test((n.textContent||'').trim()));
 }
 function update(){
- // Torn's travel list uses styled divs rather than standard table rows.
- // Find the smallest country-name element, then attach a badge inside its own row.
- const names=Object.keys(COUNTRIES);
- const candidates=document.querySelectorAll('b,strong,span,div,a');
- const seen=new Set();
- for(const node of candidates){
-  if(node.closest('.lk-travel-radar'))continue;
-  if(node.children.length>2)continue;
-  const text=(node.textContent||'').replace(/\\s+/g,' ').trim().toLowerCase();
-  const country=names.find(name=>text===name||text.startsWith(name+' -')||text.startsWith(name+' –'));
-  if(!country)continue;
-  const code=COUNTRIES[country];
-  if(seen.has(code))continue;
-  // Prefer the lowest element containing the actual name.
-  if(Array.from(node.children).some(child=>(child.textContent||'').toLowerCase().includes(country)))continue;
-  let row=node;
-  for(let i=0;i<5&&row.parentElement;i++){
-   if(row.parentElement.querySelectorAll('button').length>2)break;
-   const parent=row.parentElement;
-   const str=(parent.innerText||'').slice(0,180).toLowerCase();
-   if(str.includes('free')&&str.includes(country))break;
-   row=parent;
-  }
-  // Badge lives in its own full-width line within the country-name container.
-  const target=node.parentElement||node;
-  if(target.querySelector('.lk-travel-radar')){seen.add(code);continue;}
-  const badge=document.createElement('span');
-  badge.className='lk-travel-radar';
-  badge.dataset.code=code;
-  badge.style.cssText='display:block!important;position:absolute!important;left:0!important;top:calc(50% + 6px)!important;bottom:auto!important;float:none!important;clear:both!important;width:100%!important;max-width:100%!important;margin:0!important;font-size:10px!important;line-height:1.1!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;pointer-events:none!important;z-index:1!important';
-  target.appendChild(badge);
-  // Make room for the indicator inside the fixed-height Torn flight row.
-  target.style.setProperty('position','relative','important');
-  target.style.setProperty('padding-bottom','0px','important');
-  target.style.setProperty('box-sizing','border-box','important');
-  seen.add(code);
+ const old=document.getElementById('lk-travel-radar-panel');
+ if(!onTravelPage()){if(old)old.remove();return;}
+ let panel=old;
+ if(!panel){
+  const heading=Array.from(document.querySelectorAll('h1,h2,h3,div,span,strong')).find(n=>n.children.length===0&&(n.textContent||'').trim()==='Select Destination and Traveling Method');
+  if(!heading)return;
+  const block=heading.parentElement;
+  if(!block||!block.parentElement)return;
+  panel=document.createElement('section');
+  panel.id='lk-travel-radar-panel';
+  panel.setAttribute('aria-label','LowK3y Xanax Travel Radar');
+  block.parentElement.insertBefore(panel,block);
  }
- for(const el of document.querySelectorAll('.lk-travel-radar')){
-  const d=describe(el.dataset.code);
-  if(el.textContent!==d.text)el.textContent=d.text;
-  el.className='lk-travel-radar '+d.kind;
+ const rows=COUNTRY_LABELS.map(([name,code])=>{
+  const d=describe(code);
+  return {name,code,...d};
+ });
+ if(!panel.dataset.ready){
+  panel.innerHTML='<div class="lk-radar-title">💊 LowK3y Xanax Travel Radar <span>Live stock reports · estimates are not guaranteed</span></div><div class="lk-radar-rows"></div>';
+  panel.dataset.ready='1';
+ }
+ const wrap=panel.querySelector('.lk-radar-rows');
+ for(const d of rows){
+  let el=wrap.querySelector('[data-country="'+d.code+'"]');
+  if(!el){
+   el=document.createElement('div');el.dataset.country=d.code;el.className='lk-radar-row';
+   const name=document.createElement('strong');name.textContent=d.name;
+   const status=document.createElement('span');status.className='lk-radar-status';
+   el.append(name,status);wrap.appendChild(el);
+  }
+  const status=el.querySelector('.lk-radar-status');
+  if(status.textContent!==d.text)status.textContent=d.text;
+  status.className='lk-radar-status '+d.kind;
  }
 }
 let busy=false;
