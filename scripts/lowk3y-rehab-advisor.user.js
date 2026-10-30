@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LowK3y Rehab Advisor
 // @namespace    https://github.com/5cyp4csmpb-ctrl
-// @version      1.0.3
+// @version      1.0.4
 // @description  Movable rehab cost estimator for Torn PDA
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -21,7 +21,7 @@ const css=document.createElement('style');
 css.textContent='#lkra-btn{position:fixed;z-index:2147483000;background:#101923;color:#e9be69;border:1px solid #c69b4b;border-radius:25px;padding:12px 14px;font:bold 13px Arial;touch-action:none;cursor:grab}#lkra-panel{position:fixed;z-index:2147483001;box-sizing:border-box;width:min(340px,calc(100vw - 20px));max-height:calc(100dvh - 115px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:#111a24;color:#f3f5f8;border:1px solid #bb9452;border-radius:14px;padding:15px;font:13px Arial;box-shadow:0 8px 35px #000a}#lkra-panel *{box-sizing:border-box}#lkra-panel label{display:block;margin:10px 0 4px;color:#d6dce4}#lkra-panel input{width:100%;padding:10px;border:1px solid #43505e;border-radius:8px;background:#202c38;color:white;font-size:15px}#lkra-panel button{border:0;border-radius:8px;padding:10px;background:#d4a955;color:#111;font-weight:bold}#lkra-panel .row{display:flex;gap:8px;margin-top:12px}#lkra-panel .row button{flex:1}#lkra-panel .muted{font-size:11px;color:#acb7c4;line-height:1.45}#lkra-panel .result{background:#1d2b37;padding:12px;border-radius:9px;margin:12px 0}';
 document.head.appendChild(css);
 const btn=document.createElement('button');btn.id='lkra-btn';btn.textContent='🏥 Rehab';document.body.appendChild(btn);
-const p=document.createElement('section');p.id='lkra-panel';document.body.appendChild(p);p.style.setProperty('display','none','important');
+const p=document.createElement('section');p.id='lkra-panel';document.body.appendChild(p);p.style.setProperty('display','none','important');p.addEventListener('pointerup',e=>{if(e.target.closest('#lkra-close')){e.preventDefault();e.stopPropagation();s.open=false;save();p.style.setProperty('display','none','important')}},true);
 const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
 function pos(){s.x=Math.max(0,Math.min(s.x,innerWidth-btn.offsetWidth));s.y=Math.max(0,Math.min(s.y,innerHeight-btn.offsetHeight));btn.style.left=s.x+'px';btn.style.top=s.y+'px';p.style.left=Math.max(10,Math.min(s.x,innerWidth-p.offsetWidth-10))+'px';p.style.top=Math.max(10,Math.min(s.y+48,innerHeight-120))+'px';p.style.maxHeight=Math.max(130,innerHeight-parseFloat(p.style.top)-15)+'px'}
 function calc(){const r=Number(s.rehabs),a=Number(s.ap),t=Number(s.target);if(s.rehabs===''||s.ap===''||![r,a,t].every(Number.isFinite)||Math.min(r,a,t)<0)return 'Enter lifetime rehabs and estimated addiction points.';const per=250000/(2857+12.85*r),n=Math.ceil(Math.max(0,a-t)/per);return '<span class="muted">~'+n.toLocaleString()+' sessions · ~'+per.toFixed(1)+' AP/session</span><h2 style="color:#e9be69;margin:7px 0">$'+(n*250000).toLocaleString('en-US')+'</h2><span class="muted">Estimated only; take a cash buffer.</span>'}
